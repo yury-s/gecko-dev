@@ -2009,6 +2009,11 @@ void RuntimeService::PropagateFirstPartyStorageAccessGranted(
   }
 }
 
+void RuntimeService::ResetDefaultLocaleInAllWorkers() {
+  AssertIsOnMainThread();
+  BROADCAST_ALL_WORKERS(ResetDefaultLocale);
+}
+
 void RuntimeService::NoteIdleThread(WorkerThread* aThread) {
   AssertIsOnMainThread();
   MOZ_ASSERT(aThread);
@@ -2421,6 +2426,14 @@ void PropagateFirstPartyStorageAccessGrantedToWorkers(
   RuntimeService* runtime = RuntimeService::GetService();
   if (runtime) {
     runtime->PropagateFirstPartyStorageAccessGranted(aWindow);
+  }
+}
+
+void ResetDefaultLocaleInAllWorkers() {
+  AssertIsOnMainThread();
+  RuntimeService* runtime = RuntimeService::GetService();
+  if (runtime) {
+    runtime->ResetDefaultLocaleInAllWorkers();
   }
 }
 

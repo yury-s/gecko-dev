@@ -15,6 +15,12 @@
 #  include <unistd.h>  // for getpid()
 #endif
 
+#if JS_HAS_INTL_API && !MOZ_SYSTEM_ICU
+#  include "unicode/locid.h"
+#endif /* JS_HAS_INTL_API && !MOZ_SYSTEM_ICU */
+
+#include "js/LocaleSensitive.h"
+
 #include "mozilla/ArrayUtils.h"
 #include "mozilla/Attributes.h"
 #include "mozilla/AutoRestore.h"
@@ -72,6 +78,7 @@
 #include "mozilla/dom/nsCSPContext.h"
 #include "mozilla/dom/LoadURIOptionsBinding.h"
 #include "mozilla/dom/JSWindowActorChild.h"
+#include "mozilla/dom/WorkerCommon.h"
 
 #include "mozilla/net/DocumentChannel.h"
 #include "mozilla/net/DocumentChannelChild.h"
@@ -3379,9 +3386,31 @@ nsDocShell::GetLanguageOverride(nsAString& aLanguageOverride) {
   return NS_OK;
 }
 
+
+static void SetIcuLocale(const nsAString& aLanguageOverride) {
+  icu::Locale locale(NS_LossyConvertUTF16toASCII(aLanguageOverride).get());
+  if (icu::Locale::getDefault() == locale)
+    return;
+  UErrorCode error_code = U_ZERO_ERROR;
+  const char* lang = locale.getLanguage();
+  if (lang != nullptr && *lang != '\0') {
+    icu::Locale::setDefault(locale, error_code);
+  } else {
+    fprintf(stderr, "SetIcuLocale Failed to set the ICU default locale to %s\n", NS_LossyConvertUTF16toASCII(aLanguageOverride).get());
+  }
+
+  AutoJSAPI jsapi;
+  jsapi.Init();
+  JSContext* cx = jsapi.cx();
+  JS_ResetDefaultLocale(JS_GetRuntime(cx));
+
+  ResetDefaultLocaleInAllWorkers();
+}
+
 NS_IMETHODIMP
 nsDocShell::SetLanguageOverride(const nsAString& aLanguageOverride) {
   mLanguageOverride = aLanguageOverride;
+  SetIcuLocale(aLanguageOverride);
   return NS_OK;
 }
 
