@@ -62,8 +62,11 @@ function initialize() {
     response = { sessionIds: [], browserContextOptions: {}, waitForInitialNavigation: false };
 
   const { sessionIds, browserContextOptions, waitForInitialNavigation } = response;
-  const { userAgent, bypassCSP, javaScriptDisabled, viewport, scriptsToEvaluateOnNewDocument, bindings, locale, geolocation, onlineOverride } = browserContextOptions;
+  const { userAgent, bypassCSP, javaScriptDisabled, viewport, scriptsToEvaluateOnNewDocument, bindings, locale, timezoneId, geolocation, onlineOverride } = browserContextOptions;
 
+  let failedToOverrideTimezone = false;
+  if (timezoneId)
+    failedToOverrideTimezone = !docShell.overrideTimezone(timezoneId);
   if (userAgent !== undefined)
     docShell.browsingContext.customUserAgent = userAgent;
   if (bypassCSP !== undefined)
@@ -122,6 +125,10 @@ function initialize() {
 
     ensurePermissions() {
       // noop, just a rountrip.
+    },
+
+    hasFailedToOverrideTimezone() {
+      return failedToOverrideTimezone;
     },
 
     dispose() {

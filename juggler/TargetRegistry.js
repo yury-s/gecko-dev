@@ -69,6 +69,10 @@ class TargetRegistry {
     this._mainWindow.gBrowser.selectedTab = tab;
     const target = this._tabToTarget.get(tab);
     await target._contentReadyPromise;
+    if (browserContext.options.timezoneId) {
+      if (await target.hasFailedToOverrideTimezone())
+        throw new Error('Failed to override timezone');
+    }
     return target.id();
   }
 
@@ -244,6 +248,10 @@ class PageTarget {
 
   async setOnlineOverride(override) {
     await this._channel.connect('').send('setOnlineOverride', override).catch(e => void e);
+  }
+
+  async hasFailedToOverrideTimezone() {
+    return await this._channel.connect('').send('hasFailedToOverrideTimezone').catch(e => true);
   }
 
   dispose() {

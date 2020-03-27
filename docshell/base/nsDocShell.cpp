@@ -17,6 +17,8 @@
 
 #if JS_HAS_INTL_API && !MOZ_SYSTEM_ICU
 #  include "unicode/locid.h"
+#  include "unicode/timezone.h"
+#  include "unicode/unistr.h"
 #endif /* JS_HAS_INTL_API && !MOZ_SYSTEM_ICU */
 
 #include "js/LocaleSensitive.h"
@@ -192,6 +194,7 @@
 #include "nsGlobalWindow.h"
 #include "nsISearchService.h"
 #include "nsJSEnvironment.h"
+#include "nsJSUtils.h"
 #include "nsNetCID.h"
 #include "nsNetUtil.h"
 #include "nsObjectLoadingContent.h"
@@ -3411,6 +3414,37 @@ NS_IMETHODIMP
 nsDocShell::SetLanguageOverride(const nsAString& aLanguageOverride) {
   mLanguageOverride = aLanguageOverride;
   SetIcuLocale(aLanguageOverride);
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsDocShell::OverrideTimezone(const nsAString& aTimezoneOverride, bool* aSuccess) {
+  NS_ENSURE_ARG(aSuccess);
+
+  // Validate timezone id.
+  UniquePtr<icu::TimeZone> timezone(icu::TimeZone::createTimeZone(
+      icu::UnicodeString(NS_LossyConvertUTF16toASCII(aTimezoneOverride).get(), -1, US_INV)));
+  if (!timezone || *timezone == icu::TimeZone::getUnknown()) {
+    fprintf(stderr, "Invalid timezone id: %s\n", NS_LossyConvertUTF16toASCII(aTimezoneOverride).get());
+    *aSuccess = false;
+    return NS_OK;
+  }
+
+  // The env variable is read by js::DateTimeInfo::internalResyncICUDefaultTimeZone()
+  auto setTimeZoneEnv = [](const char* value) {
+#if defined(_WIN32)
+    return _putenv_s("TZ", value) == 0;
+#else
+    return setenv("TZ", value, true) == 0;
+#endif /* _WIN32 */
+  };
+
+  *aSuccess = setTimeZoneEnv(NS_LossyConvertUTF16toASCII(aTimezoneOverride).get());
+  if (*aSuccess) {
+    nsJSUtils::ResetTimeZone();
+  } else {
+    fprintf(stderr, "Failed to change timezone to '%s'\n", NS_LossyConvertUTF16toASCII(aTimezoneOverride).get());
+  }
   return NS_OK;
 }
 

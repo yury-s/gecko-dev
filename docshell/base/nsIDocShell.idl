@@ -1137,6 +1137,8 @@ interface nsIDocShell : nsIDocShellTreeItem
 
   attribute AString languageOverride;
 
+  boolean overrideTimezone(in AString timezoneId);
+
   cenum OnlineOverride: 8 {
     ONLINE_OVERRIDE_NONE = 0,
     ONLINE_OVERRIDE_ONLINE = 1,

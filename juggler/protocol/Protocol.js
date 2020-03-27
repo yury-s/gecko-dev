@@ -213,6 +213,7 @@ const Browser = {
         javaScriptDisabled: t.Optional(t.Boolean),
         viewport: t.Optional(pageTypes.Viewport),
         locale: t.Optional(t.String),
+        timezoneId: t.Optional(t.String),
       },
       returns: {
         browserContextId: t.String,
