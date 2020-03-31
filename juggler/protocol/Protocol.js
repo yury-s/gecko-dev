@@ -210,6 +210,7 @@ const Browser = {
         removeOnDetach: t.Optional(t.Boolean),
         userAgent: t.Optional(t.String),
         bypassCSP: t.Optional(t.Boolean),
+        ignoreHTTPSErrors: t.Optional(t.Boolean),
         javaScriptDisabled: t.Optional(t.Boolean),
         viewport: t.Optional(pageTypes.Viewport),
         locale: t.Optional(t.String),

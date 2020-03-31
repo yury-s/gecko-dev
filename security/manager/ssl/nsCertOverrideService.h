@@ -133,6 +133,7 @@ class nsCertOverrideService final : public nsICertOverrideService,
   ~nsCertOverrideService();
 
   bool mDisableAllSecurityCheck;
+  mozilla::HashSet<uint32_t> mUserContextIdsWithDisabledSecurityChecks;
   mozilla::Mutex mMutex;
   nsCOMPtr<nsIFile> mSettingsFile;
   nsTHashtable<nsCertOverrideEntry> mSettingsTable;

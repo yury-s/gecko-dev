@@ -2,6 +2,7 @@ const {EventEmitter} = ChromeUtils.import('resource://gre/modules/EventEmitter.j
 const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
 const {SimpleChannel} = ChromeUtils.import('chrome://juggler/content/SimpleChannel.js');
 const {Services} = ChromeUtils.import("resource://gre/modules/Services.jsm");
+const {Preferences} = ChromeUtils.import("resource://gre/modules/Preferences.jsm");
 const {ContextualIdentityService} = ChromeUtils.import("resource://gre/modules/ContextualIdentityService.jsm");
 const {NetUtil} = ChromeUtils.import('resource://gre/modules/NetUtil.jsm');
 const {PageHandler} = ChromeUtils.import("chrome://juggler/content/protocol/PageHandler.js");
@@ -325,6 +326,18 @@ class BrowserContext {
     this.options.scriptsToEvaluateOnNewDocument = [];
     this.options.bindings = [];
     this.pages = new Set();
+
+    if (this.options.ignoreHTTPSErrors) {
+      Preferences.set("network.stricttransportsecurity.preloadlist", false);
+      Preferences.set("security.cert_pinning.enforcement_level", 0);
+
+      const certOverrideService = Cc[
+        "@mozilla.org/security/certoverride;1"
+      ].getService(Ci.nsICertOverrideService);
+      certOverrideService.setDisableAllSecurityChecksAndLetAttackersInterceptMyData(
+        true, this.userContextId
+      );
+    }
   }
 
   destroy() {
