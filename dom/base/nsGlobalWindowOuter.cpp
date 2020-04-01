@@ -3826,6 +3826,14 @@ Maybe<CSSIntSize> nsGlobalWindowOuter::GetRDMDeviceSize(
       }
     }
   }
+  if (topInProcessContentDoc) {
+    nsIDocShell* docShell = topInProcessContentDoc->GetDocShell();
+    if (docShell && docShell->GetDeviceSizeIsPageSize()) {
+      nsPresContext* presContext = docShell->GetPresContext();
+      if (presContext)
+        return Some(CSSPixel::FromAppUnitsRounded(presContext->GetVisibleArea().Size()));
+    }
+  }
   return Nothing();
 }
 
