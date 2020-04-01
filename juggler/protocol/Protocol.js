@@ -240,11 +240,6 @@ const Browser = {
         version: t.String,
       },
     },
-    'setIgnoreHTTPSErrors': {
-      params: {
-        enabled: t.Boolean,
-      },
-    },
     'setExtraHTTPHeaders': {
       params: {
         browserContextId: t.Optional(t.String),

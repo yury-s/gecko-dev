@@ -1,9 +1,6 @@
 "use strict";
 
 const {Services} = ChromeUtils.import("resource://gre/modules/Services.jsm");
-const { allowAllCerts } = ChromeUtils.import(
-  "chrome://marionette/content/cert.js"
-);
 const {TargetRegistry} = ChromeUtils.import("chrome://juggler/content/TargetRegistry.js");
 const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
 
@@ -120,16 +117,6 @@ class BrowserHandler {
       await browserWindow.gBrowserInit.idleTasksFinishedPromise;
     }
     Services.startup.quit(Ci.nsIAppStartup.eForceQuit);
-  }
-
-  async setIgnoreHTTPSErrors({enabled}) {
-    if (!enabled) {
-      allowAllCerts.disable()
-      Services.prefs.setBoolPref('security.mixed_content.block_active_content', true);
-    } else {
-      allowAllCerts.enable()
-      Services.prefs.setBoolPref('security.mixed_content.block_active_content', false);
-    }
   }
 
   async grantPermissions({browserContextId, origin, permissions}) {
