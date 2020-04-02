@@ -44,8 +44,17 @@ CommandLineHandler.prototype = {
     this._server.initSpecialConnection(port, Ci.nsIServerSocket.KeepWhenOffline | Ci.nsIServerSocket.LoopbackOnly, 4);
 
     const token = helper.generateId();
+
+    let windowsRestoredCallback;
+    const windowsRestored = new Promise(fulfill => windowsRestoredCallback = fulfill);
+    const removeObserver = helper.addObserver(() => {
+      windowsRestoredCallback();
+      removeObserver();
+    }, "sessionstore-windows-restored");
+
     this._server.asyncListen({
       onSocketAccepted: async(socket, transport) => {
+        await windowsRestored;
         const input = transport.openInputStream(0, 0, 0);
         const output = transport.openOutputStream(0, 0, 0);
         const webSocket = await WebSocketServer.accept(transport, input, output, "/" + token);
