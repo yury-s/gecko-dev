@@ -14,7 +14,6 @@ const FRAME_SCRIPT = "chrome://juggler/content/content/main.js";
 
 // Command Line Handler
 function CommandLineHandler() {
-  this._port = -1;
 };
 
 CommandLineHandler.prototype = {
@@ -31,31 +30,39 @@ CommandLineHandler.prototype = {
     const jugglerFlag = cmdLine.handleFlagWithParam("juggler", false);
     if (!jugglerFlag || isNaN(jugglerFlag))
       return;
-    this._port = parseInt(jugglerFlag, 10);
-    Services.obs.addObserver(this, 'sessionstore-windows-restored');
-  },
+    const port = parseInt(jugglerFlag, 10);
+    const silent = cmdLine.preventDefault;
+    if (silent)
+      Services.startup.enterLastWindowClosingSurvivalArea();
 
-  observe: async function(subject, topic) {
-    Services.obs.removeObserver(this, 'sessionstore-windows-restored');
-
-    const win = await waitForBrowserWindow();
-    const targetRegistry = new TargetRegistry(win);
+    const targetRegistry = new TargetRegistry();
     new NetworkObserver(targetRegistry);
 
     const { require } = ChromeUtils.import("resource://devtools/shared/Loader.jsm");
     const WebSocketServer = require('devtools/server/socket/websocket-server');
     this._server = Cc["@mozilla.org/network/server-socket;1"].createInstance(Ci.nsIServerSocket);
-    this._server.initSpecialConnection(this._port, Ci.nsIServerSocket.KeepWhenOffline | Ci.nsIServerSocket.LoopbackOnly, 4);
+    this._server.initSpecialConnection(port, Ci.nsIServerSocket.KeepWhenOffline | Ci.nsIServerSocket.LoopbackOnly, 4);
 
     const token = helper.generateId();
 
+    let windowsRestoredCallback;
+    const windowsRestored = new Promise(fulfill => windowsRestoredCallback = fulfill);
+    const removeObserver = helper.addObserver(() => {
+      windowsRestoredCallback();
+      removeObserver();
+    }, "sessionstore-windows-restored");
+
     this._server.asyncListen({
       onSocketAccepted: async(socket, transport) => {
+        await windowsRestored;
         const input = transport.openInputStream(0, 0, 0);
         const output = transport.openOutputStream(0, 0, 0);
         const webSocket = await WebSocketServer.accept(transport, input, output, "/" + token);
         const dispatcher = new Dispatcher(webSocket);
-        const browserHandler = new BrowserHandler(dispatcher.rootSession(), dispatcher, targetRegistry);
+        const browserHandler = new BrowserHandler(dispatcher.rootSession(), dispatcher, targetRegistry, () => {
+          if (silent)
+            Services.startup.exitLastWindowClosingSurvivalArea();
+        });
         dispatcher.rootSession().registerHandler('Browser', browserHandler);
       }
     });
@@ -76,42 +83,3 @@ CommandLineHandler.prototype = {
 };
 
 var NSGetFactory = XPCOMUtils.generateNSGetFactory([CommandLineHandler]);
-
-/**
- * @return {!Promise<Ci.nsIDOMChromeWindow>}
- */
-async function waitForBrowserWindow() {
-  const windowsIt = Services.wm.getEnumerator('navigator:browser');
-  if (windowsIt.hasMoreElements())
-    return waitForWindowLoaded(windowsIt.getNext());
-
-  let fulfill;
-  let promise = new Promise(x => fulfill = x);
-
-  const listener = {
-    onOpenWindow: window => {
-      if (window instanceof Ci.nsIDOMChromeWindow) {
-        Services.wm.removeListener(listener);
-        fulfill(waitForWindowLoaded(window));
-      }
-    },
-    onCloseWindow: () => {}
-  };
-  Services.wm.addListener(listener);
-  return promise;
-
-  /**
-   * @param {!Ci.nsIDOMChromeWindow} window
-   * @return {!Promise<Ci.nsIDOMChromeWindow>}
-   */
-  function waitForWindowLoaded(window) {
-    if (window.document.readyState === 'complete')
-      return window;
-    return new Promise(fulfill => {
-      window.addEventListener('load', function listener() {
-        window.removeEventListener('load', listener);
-        fulfill(window);
-      });
-    });
-  }
-}

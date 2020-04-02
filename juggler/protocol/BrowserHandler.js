@@ -7,7 +7,7 @@ const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
 const helper = new Helper();
 
 class BrowserHandler {
-  constructor(session, dispatcher, targetRegistry) {
+  constructor(session, dispatcher, targetRegistry, onclose) {
     this._session = session;
     this._dispatcher = dispatcher;
     this._targetRegistry = targetRegistry;
@@ -16,6 +16,7 @@ class BrowserHandler {
     this._eventListeners = [];
     this._createdBrowserContextIds = new Set();
     this._attachedSessions = new Map();
+    this._onclose = onclose;
   }
 
   async enable({attachToDefaultContext}) {
@@ -53,8 +54,8 @@ class BrowserHandler {
   async removeBrowserContext({browserContextId}) {
     if (!this._enabled)
       throw new Error('Browser domain is not enabled');
+    await this._targetRegistry.browserContextForId(browserContextId).destroy();
     this._createdBrowserContextIds.delete(browserContextId);
-    this._targetRegistry.browserContextForId(browserContextId).destroy();
   }
 
   dispose() {
@@ -110,6 +111,7 @@ class BrowserHandler {
   }
 
   async close() {
+    this._onclose();
     let browserWindow = Services.wm.getMostRecentWindow(
       "navigator:browser"
     );

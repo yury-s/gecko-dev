@@ -9,6 +9,7 @@ const {PageHandler} = ChromeUtils.import("chrome://juggler/content/protocol/Page
 const {NetworkHandler} = ChromeUtils.import("chrome://juggler/content/protocol/NetworkHandler.js");
 const {RuntimeHandler} = ChromeUtils.import("chrome://juggler/content/protocol/RuntimeHandler.js");
 const {AccessibilityHandler} = ChromeUtils.import("chrome://juggler/content/protocol/AccessibilityHandler.js");
+const {AppConstants} = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
 
 const Cc = Components.classes;
 const Ci = Components.interfaces;
@@ -25,7 +26,7 @@ const ALL_PERMISSIONS = [
 ];
 
 class TargetRegistry {
-  constructor(mainWindow) {
+  constructor() {
     EventEmitter.decorate(this);
 
     this._browserContextIdToBrowserContext = new Map();
@@ -41,22 +42,20 @@ class TargetRegistry {
 
     this._defaultContext = new BrowserContext(this, undefined, undefined);
 
-    this._mainWindow = mainWindow;
     this._targets = new Map();
-
     this._tabToTarget = new Map();
+    Services.obs.addObserver(this, 'oop-frameloader-crashed');
 
-    for (const tab of this._mainWindow.gBrowser.tabs)
-      this._createTargetForTab(tab);
-    this._mainWindow.gBrowser.tabContainer.addEventListener('TabOpen', event => {
+    const onTabOpenListener = event => {
       const target = this._createTargetForTab(event.target);
       // If we come here, content will have juggler script from the start,
       // and we should wait for initial navigation.
       target._waitForInitialNavigation = true;
       // For pages created before we attach to them, we don't wait for initial
       // navigation (target._waitForInitialNavigation is false by default).
-    });
-    this._mainWindow.gBrowser.tabContainer.addEventListener('TabClose', event => {
+    };
+
+    const onTabCloseListener = event => {
       const tab = event.target;
       const target = this._tabToTarget.get(tab);
       if (!target)
@@ -65,8 +64,32 @@ class TargetRegistry {
       this._tabToTarget.delete(tab);
       target.dispose();
       this.emit(TargetRegistry.Events.TargetDestroyed, target);
-    });
-    Services.obs.addObserver(this, 'oop-frameloader-crashed');
+    };
+
+    const wmListener = {
+      onOpenWindow: async window => {
+        const domWindow = window.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowInternal || Ci.nsIDOMWindow);
+        if (!(domWindow instanceof Ci.nsIDOMChromeWindow))
+          return;
+        await this._waitForWindowLoad(domWindow);
+        for (const tab of domWindow.gBrowser.tabs)
+          this._createTargetForTab(tab);
+        domWindow.gBrowser.tabContainer.addEventListener('TabOpen', onTabOpenListener);
+        domWindow.gBrowser.tabContainer.addEventListener('TabClose', onTabCloseListener);
+      },
+      onCloseWindow: window => {
+        const domWindow = window.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowInternal || Ci.nsIDOMWindow);
+        if (!(domWindow instanceof Ci.nsIDOMChromeWindow))
+          return;
+        if (!domWindow.gBrowser)
+          return;
+        domWindow.gBrowser.tabContainer.removeEventListener('TabOpen', onTabOpenListener);
+        domWindow.gBrowser.tabContainer.removeEventListener('TabClose', onTabCloseListener);
+        for (const tab of domWindow.gBrowser.tabs)
+          onTabCloseListener({ target: tab });
+      },
+    };
+    Services.wm.addListener(wmListener);
   }
 
   defaultContext() {
@@ -81,13 +104,42 @@ class TargetRegistry {
     return this._browserContextIdToBrowserContext.get(browserContextId);
   }
 
+  async _waitForWindowLoad(window) {
+    if (window.document.readyState === 'complete')
+      return;
+    await new Promise(fulfill => {
+      window.addEventListener('load', function listener() {
+        window.removeEventListener('load', listener);
+        fulfill();
+      });
+    });
+  }
+
   async newPage({browserContextId}) {
+    let window;
+    let created = false;
+    const windowsIt = Services.wm.getEnumerator('navigator:browser');
+    if (windowsIt.hasMoreElements()) {
+      window = windowsIt.getNext();
+    } else {
+      const features = "chrome,dialog=no,all";
+      const args = Cc["@mozilla.org/supports-string;1"].createInstance(Ci.nsISupportsString);
+      args.data = 'about:blank';
+      window = Services.ww.openWindow(null, AppConstants.BROWSER_CHROME_URL, '_blank', features, args);
+      created = true;
+    }
+    await this._waitForWindowLoad(window);
     const browserContext = this.browserContextForId(browserContextId);
-    const tab = this._mainWindow.gBrowser.addTab('about:blank', {
+    const tab = window.gBrowser.addTab('about:blank', {
       userContextId: browserContext.userContextId,
       triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
     });
-    this._mainWindow.gBrowser.selectedTab = tab;
+    if (created) {
+      window.gBrowser.removeTab(window.gBrowser.getTabForBrowser(window.gBrowser.getBrowserAtIndex(0)), {
+        skipPermitUnload: true,
+      });
+    }
+    window.gBrowser.selectedTab = tab;
     const target = this._tabToTarget.get(tab);
     await target._contentReadyPromise;
     if (browserContext.options.timezoneId) {
@@ -128,14 +180,25 @@ class TargetRegistry {
     return this._targets.get(targetId);
   }
 
+  _tabForBrowser(browser) {
+    // TODO: replace all of this with browser -> target map.
+    const windowsIt = Services.wm.getEnumerator('navigator:browser');
+    while (windowsIt.hasMoreElements()) {
+      const window = windowsIt.getNext();
+      const tab = window.gBrowser.getTabForBrowser(browser);
+      if (tab)
+        return { tab, gBrowser: window.gBrowser };
+    }
+  }
+
   _targetForBrowser(browser) {
-    const tab = this._mainWindow.gBrowser.getTabForBrowser(browser);
-    return tab ? this._tabToTarget.get(tab) : undefined;
+    const tab = this._tabForBrowser(browser);
+    return tab ? this._tabToTarget.get(tab.tab) : undefined;
   }
 
   browserContextForBrowser(browser) {
-    const tab = this._mainWindow.gBrowser.getTabForBrowser(browser);
-    return tab ? this._userContextIdToBrowserContext.get(tab.userContextId) : undefined;
+    const tab = this._tabForBrowser(browser);
+    return tab ? this._userContextIdToBrowserContext.get(tab.tab.userContextId) : undefined;
   }
 
   _createTargetForTab(tab) {
@@ -158,6 +221,10 @@ class TargetRegistry {
       if (!target)
         return;
       target.emit('crashed');
+      this._targets.delete(target.id());
+      this._tabToTarget.delete(target._tab);
+      target.dispose();
+      this.emit(TargetRegistry.Events.TargetDestroyed, target);
       return;
     }
   }
@@ -182,7 +249,7 @@ class PageTarget {
     this._eventListeners = [
       helper.addProgressListener(tab.linkedBrowser, navigationListener, Ci.nsIWebProgress.NOTIFY_LOCATION),
       helper.addMessageListener(tab.linkedBrowser.messageManager, 'juggler:content-ready', {
-        receiveMessage: () => this._onContentReady()
+        receiveMessage: message => this._onContentReady(message.data)
       }),
     ];
 
@@ -228,7 +295,8 @@ class PageTarget {
   }
 
   async close(runBeforeUnload = false) {
-    await this._registry._mainWindow.gBrowser.removeTab(this._tab, {
+    const tab = this._registry._tabForBrowser(this._tab.linkedBrowser);
+    await tab.gBrowser.removeTab(this._tab, {
       skipPermitUnload: !runBeforeUnload,
     });
   }
@@ -244,7 +312,9 @@ class PageTarget {
     networkHandler.enable();
   }
 
-  _onContentReady() {
+  _onContentReady({ userContextId }) {
+    // TODO: this is the earliest when userContextId is available.
+    // We should create target here, while listening to onContentReady for every tab.
     const sessions = [];
     const data = { sessions, target: this };
     this._registry.emit(TargetRegistry.Events.PageTargetReady, data);
@@ -340,10 +410,20 @@ class BrowserContext {
     }
   }
 
-  destroy() {
+  async destroy() {
     if (this.userContextId !== 0) {
       ContextualIdentityService.remove(this.userContextId);
       ContextualIdentityService.closeContainerTabs(this.userContextId);
+      if (this.pages.size) {
+        await new Promise(f => {
+          const listener = helper.on(this._registry, TargetRegistry.Events.TargetDestroyed, () => {
+            if (!this.pages.size) {
+              helper.removeListeners([listener]);
+              f();
+            }
+          });
+        });
+      }
     }
     this._registry._browserContextIdToBrowserContext.delete(this.browserContextId);
     this._registry._userContextIdToBrowserContext.delete(this.userContextId);

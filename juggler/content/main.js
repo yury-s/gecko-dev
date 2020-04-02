@@ -57,7 +57,10 @@ function setOnlineOverrideInDocShell(override) {
 }
 
 function initialize() {
-  let response = sendSyncMessage('juggler:content-ready', {})[0];
+  const loadContext = docShell.QueryInterface(Ci.nsILoadContext);
+  const userContextId = loadContext.originAttributes.userContextId;
+
+  let response = sendSyncMessage('juggler:content-ready', { userContextId })[0];
   if (!response)
     response = { sessionIds: [], browserContextOptions: {}, waitForInitialNavigation: false };
 
