@@ -200,15 +200,7 @@ class NetworkObserver {
   }
 
   _getBrowserForChannel(httpChannel) {
-    let loadContext = null;
-    try {
-      if (httpChannel.notificationCallbacks)
-        loadContext = httpChannel.notificationCallbacks.getInterface(Ci.nsILoadContext);
-    } catch (e) {}
-    try {
-      if (!loadContext && httpChannel.loadGroup)
-        loadContext = httpChannel.loadGroup.notificationCallbacks.getInterface(Ci.nsILoadContext);
-    } catch (e) { }
+    let loadContext = helper.getLoadContext(httpChannel);
     if (!loadContext || !this._browserSessionCount.has(loadContext.topFrameElement))
       return;
     return loadContext.topFrameElement;

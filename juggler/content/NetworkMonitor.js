@@ -21,7 +21,7 @@ class NetworkMonitor {
     if (!(channel instanceof Ci.nsIHttpChannel))
       return;
     const httpChannel = channel.QueryInterface(Ci.nsIHttpChannel);
-    const loadContext = getLoadContext(httpChannel);
+    const loadContext = helper.getLoadContext(httpChannel);
     if (!loadContext)
       return;
     const window = loadContext.associatedWindow;
@@ -42,20 +42,6 @@ class NetworkMonitor {
     helper.removeListeners(this._eventListeners);
   }
 }
-
-function getLoadContext(httpChannel) {
-  let loadContext = null;
-  try {
-    if (httpChannel.notificationCallbacks)
-      loadContext = httpChannel.notificationCallbacks.getInterface(Ci.nsILoadContext);
-  } catch (e) {}
-  try {
-    if (!loadContext && httpChannel.loadGroup)
-      loadContext = httpChannel.loadGroup.notificationCallbacks.getInterface(Ci.nsILoadContext);
-  } catch (e) { }
-  return loadContext;
-}
-
 
 var EXPORTED_SYMBOLS = ['NetworkMonitor'];
 this.NetworkMonitor = NetworkMonitor;

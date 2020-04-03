@@ -25,6 +25,88 @@ const ALL_PERMISSIONS = [
   'desktop-notification',
 ];
 
+class DownloadInterceptor {
+  constructor(registry) {
+    this._registry = registry
+    this._handlerToUuid = new Map();
+    helper.addObserver(this._onRequest.bind(this), 'http-on-modify-request');
+  }
+
+  _onRequest(httpChannel, topic) {
+    let loadContext = helper.getLoadContext(httpChannel);
+    if (!loadContext)
+      return;
+    if (!loadContext.topFrameElement)
+      return;
+    const target = this._registry.targetForBrowser(loadContext.topFrameElement);
+    if (!target)
+      return;
+    target._httpChannelIds.add(httpChannel.channelId);
+  }
+
+  //
+  // nsIDownloadInterceptor implementation.
+  //
+  interceptDownloadRequest(externalAppHandler, request, outFile) {
+    const httpChannel = request.QueryInterface(Ci.nsIHttpChannel);
+    if (!httpChannel)
+      return false;
+    if (!httpChannel.loadInfo)
+      return false;
+    const userContextId = httpChannel.loadInfo.originAttributes.userContextId;
+    const browserContext = this._registry._userContextIdToBrowserContext.get(userContextId);
+    const options = browserContext.options.downloadOptions;
+    if (!options)
+      return false;
+
+    const pageTarget = this._registry._targetForChannel(httpChannel);
+    if (!pageTarget)
+      return false;
+
+    const uuid = helper.generateId();
+    let file = null;
+    if (options.behavior === 'saveToDisk') {
+      file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+      file.initWithPath(options.downloadsDir);
+      file.append(uuid);
+
+      try {
+        file.create(Ci.nsIFile.NORMAL_FILE_TYPE, 0o600);
+      } catch (e) {
+        dump(`interceptDownloadRequest failed to create file: ${e}\n`);
+        return false;
+      }
+    }
+    outFile.value = file;
+    this._handlerToUuid.set(externalAppHandler, uuid);
+    const downloadInfo = {
+      uuid,
+      browserContextId: browserContext.browserContextId,
+      pageTargetId: pageTarget.id(),
+      url: httpChannel.URI.spec,
+      suggestedFileName: externalAppHandler.suggestedFileName,
+    };
+    this._registry.emit(TargetRegistry.Events.DownloadCreated, downloadInfo);
+    return true;
+  }
+
+  onDownloadComplete(externalAppHandler, canceled, errorName) {
+    const uuid = this._handlerToUuid.get(externalAppHandler);
+    if (!uuid)
+      return;
+    this._handlerToUuid.delete(externalAppHandler);
+    const downloadInfo = {
+      uuid,
+    };
+    if (errorName === 'NS_BINDING_ABORTED') {
+      downloadInfo.canceled = true;
+    } else {
+      downloadInfo.error = errorName;
+    }
+    this._registry.emit(TargetRegistry.Events.DownloadFinished, downloadInfo);
+  }
+}
+
 class TargetRegistry {
   constructor() {
     EventEmitter.decorate(this);
@@ -150,6 +232,9 @@ class TargetRegistry {
           onTabCloseListener({ target: tab });
       },
     });
+
+    const extHelperAppSvc = Cc["@mozilla.org/uriloader/external-helper-app-service;1"].getService(Ci.nsIExternalHelperAppService);
+    extHelperAppSvc.setDownloadInterceptor(new DownloadInterceptor(this));
   }
 
   defaultContext() {
@@ -223,6 +308,18 @@ class TargetRegistry {
   targetForBrowser(browser) {
     return this._browserToTarget.get(browser);
   }
+
+  _targetForChannel(httpChannel) {
+    let loadContext = helper.getLoadContext(httpChannel);
+    if (loadContext)
+      return this.targetForBrowser(loadContext.topFrameElement);
+    const channelId = httpChannel.channelId;
+    for (const target of this._browserToTarget.values()) {
+      if (target._httpChannelIds.has(channelId))
+        return target;
+    }
+    return null;
+  }
 }
 
 class PageTarget {
@@ -238,6 +335,7 @@ class PageTarget {
     this._url = '';
     this._openerId = opener ? opener.id() : undefined;
     this._channel = SimpleChannel.createForMessageManager(`browser::page[${this._targetId}]`, this._linkedBrowser.messageManager);
+    this._httpChannelIds = new Set();
 
     const navigationListener = {
       QueryInterface: ChromeUtils.generateQI([ Ci.nsIWebProgressListener]),
@@ -555,6 +653,8 @@ function setViewportSizeForBrowser(viewportSize, browser) {
 TargetRegistry.Events = {
   TargetCreated: Symbol('TargetRegistry.Events.TargetCreated'),
   TargetDestroyed: Symbol('TargetRegistry.Events.TargetDestroyed'),
+  DownloadCreated: Symbol('TargetRegistry.Events.DownloadCreated'),
+  DownloadFinished: Symbol('TargetRegistry.Events.DownloadFinished'),
 };
 
 var EXPORTED_SYMBOLS = ['TargetRegistry'];

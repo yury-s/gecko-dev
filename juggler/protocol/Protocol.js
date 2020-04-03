@@ -42,6 +42,11 @@ browserTypes.Geolocation = {
   accuracy: t.Optional(t.Number),
 };
 
+browserTypes.DownloadOptions = {
+  behavior: t.Optional(t.Enum(['saveToDisk', 'cancel'])),
+  downloadsDir: t.Optional(t.String),
+};
+
 const pageTypes = {};
 pageTypes.DOMPoint = {
   x: t.Number,
@@ -183,6 +188,7 @@ networkTypes.SecurityDetails = {
   validTo: t.Number,
 };
 
+
 const Browser = {
   targets: ['browser'],
 
@@ -196,6 +202,18 @@ const Browser = {
     'detachedFromTarget': {
       sessionId: t.String,
       targetId: t.String,
+    },
+    'downloadCreated': {
+      uuid: t.String,
+      browserContextId: t.String,
+      pageTargetId: t.String,
+      url: t.String,
+      suggestedFileName: t.String,
+    },
+    'downloadFinished': {
+      uuid: t.String,
+      canceled: t.Optional(t.Boolean),
+      error: t.Optional(t.String),
     },
   },
 
@@ -215,6 +233,7 @@ const Browser = {
         viewport: t.Optional(pageTypes.Viewport),
         locale: t.Optional(t.String),
         timezoneId: t.Optional(t.String),
+        downloadOptions: t.Optional(browserTypes.DownloadOptions),
       },
       returns: {
         browserContextId: t.String,

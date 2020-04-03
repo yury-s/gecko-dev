@@ -40,6 +40,8 @@ class BrowserHandler {
     this._eventListeners = [
       helper.on(this._targetRegistry, TargetRegistry.Events.TargetCreated, this._onTargetCreated.bind(this)),
       helper.on(this._targetRegistry, TargetRegistry.Events.TargetDestroyed, this._onTargetDestroyed.bind(this)),
+      helper.on(this._targetRegistry, TargetRegistry.Events.DownloadCreated, this._onDownloadCreated.bind(this)),
+      helper.on(this._targetRegistry, TargetRegistry.Events.DownloadFinished, this._onDownloadFinished.bind(this)),
     ];
   }
 
@@ -103,6 +105,14 @@ class BrowserHandler {
       sessionId: session.sessionId(),
       targetId: target.id(),
     });
+  }
+
+  _onDownloadCreated(downloadInfo) {
+    this._session.emitEvent('Browser.downloadCreated', downloadInfo);
+  }
+
+  _onDownloadFinished(downloadInfo) {
+    this._session.emitEvent('Browser.downloadFinished', downloadInfo);
   }
 
   async newPage({browserContextId}) {
