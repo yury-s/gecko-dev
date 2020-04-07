@@ -300,11 +300,6 @@ class TargetRegistry {
     return Array.from(this._browserToTarget.values());
   }
 
-  browserContextForBrowser(browser) {
-    const target = this._browserToTarget.get(browser);
-    return target ? target._browserContext : undefined;
-  }
-
   targetForBrowser(browser) {
     return this._browserToTarget.get(browser);
   }
@@ -354,6 +349,10 @@ class PageTarget {
 
   linkedBrowser() {
     return this._linkedBrowser;
+  }
+
+  browserContext() {
+    return this._browserContext;
   }
 
   setViewportSize(viewportSize) {

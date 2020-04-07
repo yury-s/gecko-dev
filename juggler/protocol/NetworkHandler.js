@@ -1,6 +1,7 @@
 "use strict";
 
 const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
+const {NetworkObserver, PageNetwork} = ChromeUtils.import('chrome://juggler/content/NetworkObserver.js');
 
 const Cc = Components.classes;
 const Ci = Components.interfaces;
@@ -12,10 +13,9 @@ class NetworkHandler {
   constructor(target, session, contentChannel) {
     this._session = session;
     this._contentPage = contentChannel.connect(session.sessionId() + 'page');
-    this._networkObserver = ChromeUtils.import('chrome://juggler/content/NetworkObserver.js').NetworkObserver.instance();
     this._httpActivity = new Map();
     this._enabled = false;
-    this._browser = target.linkedBrowser();
+    this._pageNetwork = NetworkObserver.instance().pageNetworkForTarget(target);
     this._requestInterception = false;
     this._eventListeners = [];
     this._pendingRequstWillBeSentEvents = new Set();
@@ -27,42 +27,42 @@ class NetworkHandler {
       return;
     this._enabled = true;
     this._eventListeners = [
-      helper.on(this._networkObserver, 'request', this._onRequest.bind(this)),
-      helper.on(this._networkObserver, 'response', this._onResponse.bind(this)),
-      helper.on(this._networkObserver, 'requestfinished', this._onRequestFinished.bind(this)),
-      helper.on(this._networkObserver, 'requestfailed', this._onRequestFailed.bind(this)),
-      this._networkObserver.startTrackingBrowserNetwork(this._browser),
+      helper.on(this._pageNetwork, PageNetwork.Events.Request, this._onRequest.bind(this)),
+      helper.on(this._pageNetwork, PageNetwork.Events.Response, this._onResponse.bind(this)),
+      helper.on(this._pageNetwork, PageNetwork.Events.RequestFinished, this._onRequestFinished.bind(this)),
+      helper.on(this._pageNetwork, PageNetwork.Events.RequestFailed, this._onRequestFailed.bind(this)),
+      this._pageNetwork.addSession(),
     ];
   }
 
   async getResponseBody({requestId}) {
-    return this._networkObserver.getResponseBody(this._browser, requestId);
+    return this._pageNetwork.getResponseBody(requestId);
   }
 
   async setExtraHTTPHeaders({headers}) {
-    this._networkObserver.setExtraHTTPHeaders(this._browser, headers);
+    this._pageNetwork.setExtraHTTPHeaders(headers);
   }
 
   async setRequestInterception({enabled}) {
     if (enabled)
-      this._networkObserver.enableRequestInterception(this._browser);
+      this._pageNetwork.enableRequestInterception();
     else
-      this._networkObserver.disableRequestInterception(this._browser);
+    this._pageNetwork.disableRequestInterception();
     // Right after we enable/disable request interception we need to await all pending
     // requestWillBeSent events before successfully returning from the method.
     await Promise.all(Array.from(this._pendingRequstWillBeSentEvents));
   }
 
   async resumeInterceptedRequest({requestId, method, headers, postData}) {
-    this._networkObserver.resumeInterceptedRequest(this._browser, requestId, method, headers, postData);
+    this._pageNetwork.resumeInterceptedRequest(requestId, method, headers, postData);
   }
 
   async abortInterceptedRequest({requestId, errorCode}) {
-    this._networkObserver.abortInterceptedRequest(this._browser, requestId, errorCode);
+    this._pageNetwork.abortInterceptedRequest(requestId, errorCode);
   }
 
   async fulfillInterceptedRequest({requestId, status, statusText, headers, base64body}) {
-    this._networkObserver.fulfillInterceptedRequest(this._browser, requestId, status, statusText, headers, base64body);
+    this._pageNetwork.fulfillInterceptedRequest(requestId, status, statusText, headers, base64body);
   }
 
   dispose() {
