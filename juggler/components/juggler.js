@@ -45,16 +45,11 @@ CommandLineHandler.prototype = {
 
     const token = helper.generateId();
 
-    let windowsRestoredCallback;
-    const windowsRestored = new Promise(fulfill => windowsRestoredCallback = fulfill);
-    const removeObserver = helper.addObserver(() => {
-      windowsRestoredCallback();
-      removeObserver();
-    }, "sessionstore-windows-restored");
+    // Force create hidden window here, otherwise its creation later closes the web socket!
+    Services.appShell.hiddenDOMWindow;
 
     this._server.asyncListen({
       onSocketAccepted: async(socket, transport) => {
-        await windowsRestored;
         const input = transport.openInputStream(0, 0, 0);
         const output = transport.openOutputStream(0, 0, 0);
         const webSocket = await WebSocketServer.accept(transport, input, output, "/" + token);

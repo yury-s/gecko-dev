@@ -151,6 +151,10 @@ class TargetRegistry {
         const windowsIt = Services.wm.getEnumerator('navigator:browser');
         while (windowsIt.hasMoreElements()) {
           const window = windowsIt.getNext();
+          // gBrowser is always created before tabs. If gBrowser is not
+          // initialized yet the browser belongs to another window.
+          if (!window.gBrowser)
+            continue;
           tab = window.gBrowser.getTabForBrowser(linkedBrowser);
           if (tab) {
             gBrowser = window.gBrowser;
