@@ -1221,6 +1221,42 @@ void nsINode::GetBoxQuadsFromWindowOrigin(const BoxQuadOptions& aOptions,
   mozilla::GetBoxQuadsFromWindowOrigin(this, aOptions, aResult, aRv);
 }
 
+void nsINode::ScrollRectIntoViewIfNeeded(int32_t x, int32_t y,
+                                         int32_t w, int32_t h,
+                                         ErrorResult& aRv) {
+  aRv = NS_ERROR_UNEXPECTED;
+  nsCOMPtr<Document> document = OwnerDoc();
+  if (!document) {
+    return;
+  }
+  PresShell* presShell = document->GetPresShell();
+  if (!presShell) {
+    return;
+  }
+  if (!IsContent()) {
+    return;
+  }
+  nsIFrame* primaryFrame = AsContent()->GetPrimaryFrame(FlushType::Frames);
+  if (!primaryFrame){
+    return;
+  }
+  nsRect rect;
+  if (x == -1 && y == -1 && w == -1 && h == -1) {
+    rect = primaryFrame->GetRectRelativeToSelf();
+  } else {
+    rect = nsRect(nsPresContext::CSSPixelsToAppUnits(x),
+                  nsPresContext::CSSPixelsToAppUnits(y),
+                  nsPresContext::CSSPixelsToAppUnits(w),
+                  nsPresContext::CSSPixelsToAppUnits(h));
+  }
+  presShell->ScrollFrameRectIntoView(
+      primaryFrame, rect,
+      ScrollAxis(kScrollToCenter, WhenToScroll::Always),
+      ScrollAxis(kScrollToCenter, WhenToScroll::Always),
+      ScrollFlags::ScrollOverflowHidden);
+  aRv = NS_OK;
+}
+
 already_AddRefed<DOMQuad> nsINode::ConvertQuadFromNode(
     DOMQuad& aQuad, const GeometryNode& aFrom,
     const ConvertCoordinateOptions& aOptions, CallerType aCallerType,

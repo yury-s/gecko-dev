@@ -598,39 +598,12 @@ class PageAgent {
     const unsafeObject = this._frameData.get(frame).unsafeObject(objectId);
     if (!unsafeObject.isConnected)
       throw new Error('Node is detached from document');
-    await this._scrollNodeIntoViewIfNeeded(unsafeObject);
-    const box = this._getNodeBoundingBox(unsafeObject);
-    if (rect) {
-      box.x += rect.x;
-      box.y += rect.y;
-      box.width = rect.width;
-      box.height = rect.height;
-    }
-    this._scrollRectIntoViewIfNeeded(unsafeObject, box);
-  }
-
-  async _scrollNodeIntoViewIfNeeded(node) {
-    if (node.nodeType !== 1)
-      node = node.parentElement;
-    if (!node.ownerDocument || !node.ownerDocument.defaultView)
-      return;
-    const global = node.ownerDocument.defaultView;
-    const visibleRatio = await new Promise(resolve => {
-      const observer = new global.IntersectionObserver(entries => {
-        resolve(entries[0].intersectionRatio);
-        observer.disconnect();
-      });
-      observer.observe(node);
-      // Firefox doesn't call IntersectionObserver callback unless
-      // there are rafs.
-      global.requestAnimationFrame(() => {});
-    });
-    if (visibleRatio !== 1.0)
-      node.scrollIntoView({block: 'center', inline: 'center', behavior: 'instant'});
-  }
-
-  _scrollRectIntoViewIfNeeded(node, rect) {
-    // TODO: implement.
+    if (!rect)
+      rect = { x: -1, y: -1, width: -1, height: -1};
+    if (unsafeObject.scrollRectIntoViewIfNeeded)
+      unsafeObject.scrollRectIntoViewIfNeeded(rect.x, rect.y, rect.width, rect.height);
+    else
+      throw new Error('Node type does not support scrollRectIntoViewIfNeeded');
   }
 
   _getNodeBoundingBox(unsafeObject) {
