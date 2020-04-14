@@ -1255,6 +1255,12 @@ void nsINode::ScrollRectIntoViewIfNeeded(int32_t x, int32_t y,
       ScrollAxis(kScrollToCenter, WhenToScroll::Always),
       ScrollAxis(kScrollToCenter, WhenToScroll::Always),
       ScrollFlags::ScrollOverflowHidden);
+  // If a _visual_ scroll update is pending, cancel it; otherwise, it will
+  // clobber next scroll (e.g. subsequent window.scrollTo(0, 0) wlll break).
+  if (presShell->GetPendingVisualScrollUpdate()) {
+    presShell->AcknowledgePendingVisualScrollUpdate();
+    presShell->ClearPendingVisualScrollUpdate();
+  }
 }
 
 already_AddRefed<DOMQuad> nsINode::ConvertQuadFromNode(
