@@ -89,6 +89,9 @@ function initialize() {
     scrollbarManager.setFloatingScrollbars(viewport.isMobile);
   }
 
+  // Enforce focused state for all top level documents.
+  docShell.overrideHasFocus = true;
+
   frameTree = new FrameTree(docShell);
   if (colorScheme !== undefined)
     frameTree.setColorScheme(colorScheme);
@@ -134,10 +137,6 @@ function initialize() {
 
     ensurePermissions() {
       // noop, just a rountrip.
-    },
-
-    setFocused() {
-      docShell.overrideHasFocus = true;
     },
 
     hasFailedToOverrideTimezone() {
