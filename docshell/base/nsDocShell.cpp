@@ -361,6 +361,7 @@ nsDocShell::nsDocShell(BrowsingContext* aBrowsingContext,
       mObserveErrorPages(true),
       mCSSErrorReportingEnabled(false),
       mFileInputInterceptionEnabled(false),
+      mOverrideHasFocus(false),
       mBypassCSPEnabled(false),
       mOnlineOverride(nsIDocShell::ONLINE_OVERRIDE_NONE),
       mColorSchemeOverride(COLOR_SCHEME_OVERRIDE_NONE),
@@ -3379,6 +3380,23 @@ nsDocShell::SetBypassCSPEnabled(bool aEnabled) {
 
 bool nsDocShell::IsBypassCSPEnabled() {
   return GetRootDocShell()->mBypassCSPEnabled;
+}
+
+NS_IMETHODIMP
+nsDocShell::GetOverrideHasFocus(bool* aEnabled) {
+  MOZ_ASSERT(aEnabled);
+  *aEnabled = mOverrideHasFocus;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsDocShell::SetOverrideHasFocus(bool aEnabled) {
+  mOverrideHasFocus = aEnabled;
+  return NS_OK;
+}
+
+bool nsDocShell::ShouldOverrideHasFocus() const {
+  return mOverrideHasFocus;
 }
 
 NS_IMETHODIMP

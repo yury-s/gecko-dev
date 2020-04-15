@@ -484,6 +484,8 @@ class nsDocShell final : public nsDocLoader,
   bool IsFileInputInterceptionEnabled();
   void FilePickerShown(mozilla::dom::Element* element);
 
+  bool ShouldOverrideHasFocus() const;
+
   bool IsBypassCSPEnabled();
 
   RefPtr<nsGeolocationService> GetGeolocationServiceOverride();
@@ -1304,6 +1306,7 @@ class nsDocShell final : public nsDocLoader,
   bool mObserveErrorPages : 1;
   bool mCSSErrorReportingEnabled : 1;
   bool mFileInputInterceptionEnabled: 1;
+  bool mOverrideHasFocus : 1;
   bool mBypassCSPEnabled : 1;
   nsString mLanguageOverride;
   RefPtr<nsGeolocationService> mGeolocationServiceOverride;

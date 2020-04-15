@@ -4063,6 +4063,10 @@ bool Document::HasFocus(ErrorResult& rv) const {
     return false;
   }
 
+  if (IsActive() && mDocumentContainer->ShouldOverrideHasFocus()) {
+    return true;
+  }
+
   // Is there a focused DOMWindow?
   nsCOMPtr<mozIDOMWindowProxy> focusedWindow;
   fm->GetFocusedWindow(getter_AddRefs(focusedWindow));

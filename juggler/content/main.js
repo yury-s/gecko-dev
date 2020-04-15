@@ -136,6 +136,10 @@ function initialize() {
       // noop, just a rountrip.
     },
 
+    setFocused() {
+      docShell.overrideHasFocus = true;
+    },
+
     hasFailedToOverrideTimezone() {
       return failedToOverrideTimezone;
     },

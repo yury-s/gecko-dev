@@ -287,6 +287,8 @@ class TargetRegistry {
         }
       });
     });
+    // Enforce focused state for all top level documents created via newPage.
+    target.setFocused();
     if (created) {
       window.gBrowser.removeTab(window.gBrowser.getTabForBrowser(window.gBrowser.getBrowserAtIndex(0)), {
         skipPermitUnload: true,
@@ -434,6 +436,10 @@ class PageTarget {
 
   async hasFailedToOverrideTimezone() {
     return await this._channel.connect('').send('hasFailedToOverrideTimezone').catch(e => true);
+  }
+
+  async setFocused() {
+    await this._channel.connect('').send('setFocused').catch(e => true);
   }
 
   dispose() {

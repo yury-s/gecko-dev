@@ -1133,6 +1133,8 @@ interface nsIDocShell : nsIDocShellTreeItem
 
   attribute boolean fileInputInterceptionEnabled;
 
+  attribute boolean overrideHasFocus;
+
   attribute boolean bypassCSPEnabled;
 
   attribute AString languageOverride;
