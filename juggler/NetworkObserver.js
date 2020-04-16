@@ -618,9 +618,14 @@ class ResponseBodyListener {
     if (this._disposed)
       return;
 
-    const body = this._chunks.join('');
+    if (aStatusCode === 0) {
+      const body = this._chunks.join('');
+      this._networkObserver._onResponseFinished(this._pageNetwork, this._httpChannel, body);
+    } else {
+      this._networkObserver._sendOnRequestFailed(this._pageNetwork, this._httpChannel, aStatusCode);
+    }
+
     delete this._chunks;
-    this._networkObserver._onResponseFinished(this._pageNetwork, this._httpChannel, body);
     this.dispose();
   }
 
