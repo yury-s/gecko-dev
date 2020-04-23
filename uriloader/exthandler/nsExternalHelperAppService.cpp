@@ -1593,7 +1593,7 @@ NS_IMETHODIMP nsExternalAppHandler::OnStartRequest(nsIRequest* request) {
   nsCOMPtr<nsIDownloadInterceptor> interceptor = mExtProtSvc->mInterceptor;
   if (interceptor) {
     nsCOMPtr<nsIFile> fileToUse;
-    rv = interceptor->InterceptDownloadRequest(this, request, getter_AddRefs(fileToUse), &isIntercepted);
+    rv = interceptor->InterceptDownloadRequest(this, request, mBrowsingContext, getter_AddRefs(fileToUse), &isIntercepted);
     if (!NS_SUCCEEDED(rv)) {
       LOG(("    failed to call nsIDowloadInterceptor.interceptDownloadRequest"));
       return rv;

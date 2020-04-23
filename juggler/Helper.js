@@ -41,15 +41,15 @@ class Helper {
     return string.substring(1, string.length - 1);
   }
 
-  getLoadContext(httpChannel) {
+  getLoadContext(channel) {
     let loadContext = null;
     try {
-      if (httpChannel.notificationCallbacks)
-        loadContext = httpChannel.notificationCallbacks.getInterface(Ci.nsILoadContext);
+      if (channel.notificationCallbacks)
+        loadContext = channel.notificationCallbacks.getInterface(Ci.nsILoadContext);
     } catch (e) {}
     try {
-      if (!loadContext && httpChannel.loadGroup)
-        loadContext = httpChannel.loadGroup.notificationCallbacks.getInterface(Ci.nsILoadContext);
+      if (!loadContext && channel.loadGroup)
+        loadContext = channel.loadGroup.notificationCallbacks.getInterface(Ci.nsILoadContext);
     } catch (e) { }
     return loadContext;
   }

@@ -11,10 +11,6 @@ const {RuntimeHandler} = ChromeUtils.import("chrome://juggler/content/protocol/R
 const {AccessibilityHandler} = ChromeUtils.import("chrome://juggler/content/protocol/AccessibilityHandler.js");
 const {AppConstants} = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
 
-const Cc = Components.classes;
-const Ci = Components.interfaces;
-const Cu = Components.utils;
-
 const helper = new Helper();
 
 const IDENTITY_NAME = 'JUGGLER ';
@@ -29,38 +25,19 @@ class DownloadInterceptor {
   constructor(registry) {
     this._registry = registry
     this._handlerToUuid = new Map();
-    helper.addObserver(this._onRequest.bind(this), 'http-on-modify-request');
-  }
-
-  _onRequest(httpChannel, topic) {
-    let loadContext = helper.getLoadContext(httpChannel);
-    if (!loadContext)
-      return;
-    if (!loadContext.topFrameElement)
-      return;
-    const target = this._registry.targetForBrowser(loadContext.topFrameElement);
-    if (!target)
-      return;
-    target._httpChannelIds.add(httpChannel.channelId);
   }
 
   //
   // nsIDownloadInterceptor implementation.
   //
-  interceptDownloadRequest(externalAppHandler, request, outFile) {
-    const httpChannel = request.QueryInterface(Ci.nsIHttpChannel);
-    if (!httpChannel)
-      return false;
-    if (!httpChannel.loadInfo)
-      return false;
-    const userContextId = httpChannel.loadInfo.originAttributes.userContextId;
-    const browserContext = this._registry._userContextIdToBrowserContext.get(userContextId);
-    const options = browserContext.options.downloadOptions;
-    if (!options)
+  interceptDownloadRequest(externalAppHandler, request, browsingContext, outFile) {
+    const pageTarget = this._registry._browserBrowsingContextToTarget.get(browsingContext);
+    if (!pageTarget)
       return false;
 
-    const pageTarget = this._registry._targetForChannel(httpChannel);
-    if (!pageTarget)
+    const browserContext = pageTarget.browserContext();
+    const options = browserContext.options.downloadOptions;
+    if (!options)
       return false;
 
     const uuid = helper.generateId();
@@ -83,7 +60,7 @@ class DownloadInterceptor {
       uuid,
       browserContextId: browserContext.browserContextId,
       pageTargetId: pageTarget.id(),
-      url: httpChannel.URI.spec,
+      url: request.name,
       suggestedFileName: externalAppHandler.suggestedFileName,
     };
     this._registry.emit(TargetRegistry.Events.DownloadCreated, downloadInfo);
@@ -307,18 +284,6 @@ class TargetRegistry {
   targetForBrowser(browser) {
     return this._browserToTarget.get(browser);
   }
-
-  _targetForChannel(httpChannel) {
-    let loadContext = helper.getLoadContext(httpChannel);
-    if (loadContext)
-      return this.targetForBrowser(loadContext.topFrameElement);
-    const channelId = httpChannel.channelId;
-    for (const target of this._browserToTarget.values()) {
-      if (target._httpChannelIds.has(channelId))
-        return target;
-    }
-    return null;
-  }
 }
 
 class PageTarget {
@@ -334,7 +299,6 @@ class PageTarget {
     this._url = '';
     this._openerId = opener ? opener.id() : undefined;
     this._channel = SimpleChannel.createForMessageManager(`browser::page[${this._targetId}]`, this._linkedBrowser.messageManager);
-    this._httpChannelIds = new Set();
 
     const navigationListener = {
       QueryInterface: ChromeUtils.generateQI([ Ci.nsIWebProgressListener]),
