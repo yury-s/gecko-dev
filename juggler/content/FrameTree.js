@@ -222,7 +222,7 @@ class FrameTree {
       // Always report download navigation as failure to match other browsers.
       const errorText = isDownload ? 'Will download to file' : helper.getNetworkErrorStatusText(status);
       this.emit(FrameTree.Events.NavigationAborted, frame, navigationId, errorText);
-      if (frame === this._mainFrame && status !== Cr.NS_BINDING_ABORTED)
+      if (frame === this._mainFrame && status !== Cr.NS_BINDING_ABORTED && !isDownload)
         this.forcePageReady();
     }
   }
