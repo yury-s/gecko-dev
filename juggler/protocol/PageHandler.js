@@ -284,6 +284,24 @@ class PageHandler {
       throw new Error('ERROR: cannot find worker with id ' + workerId);
     return await worker.sendMessage(JSON.parse(message));
   }
+
+  startVideoRecording({file, width, height, scale}) {
+    dump(`
+    startVideoRecording
+    `);
+    const screencast = Cc['@mozilla.org/juggler/screencast;1'].getService(Ci.nsIScreencastService);
+    const docShell = this._pageTarget._gBrowser.ownerGlobal.docShell;
+    screencast.startVideoRecording(docShell, file);
+  }
+
+  stopVideoRecording() {
+    dump(`
+    stopVideoRecording
+    `);
+    const screencast = Cc['@mozilla.org/juggler/screencast;1'].getService(Ci.nsIScreencastService);
+    const docShell = this._pageTarget._gBrowser.ownerGlobal.docShell;
+    screencast.stopVideoRecording(docShell);
+  }
 }
 
 class Dialog {

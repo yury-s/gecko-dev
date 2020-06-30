@@ -1216,6 +1216,7 @@ already_AddRefed<LayerManager> nsBaseWidget::CreateCompositorSession(
     }
 
     bool retry = false;
+    fprintf(stderr, "this=%p mCompositorSession = gpu->CreateTopLevelCompositor( %d\n", this, XRE_IsParentProcess());
     mCompositorSession = gpu->CreateTopLevelCompositor(
         this, lm, GetDefaultScale(), options, UseExternalCompositingSurface(),
         gfx::IntSize(aWidth, aHeight), &retry);

@@ -484,6 +484,7 @@ nsWindow::nsWindow() {
   mWindowScaleFactor = 1;
 
   mIsAccelerated = false;
+  fprintf(stderr, "___nsWindow::nsWindow() %p\n", this);
 }
 
 nsWindow::~nsWindow() {

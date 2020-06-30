@@ -218,7 +218,8 @@ BasicCompositor::BasicCompositor(CompositorBridgeParent* aParent,
       mIsPendingEndRemoteDrawing(false),
       mFullWindowRenderTarget(nullptr) {
   MOZ_COUNT_CTOR(BasicCompositor);
-
+fprintf(stderr, "BasicCompositor::BasicCompositor\n");
+fprintf(stderr, "    thread=%p name=%s\n", PR_GetCurrentThread(), PR_GetThreadName(PR_GetCurrentThread()));
   // The widget backends may create intermediate Cairo surfaces to deal with
   // various window buffers, regardless of actual content backend type, when
   // using the basic compositor. Ensure that the buffers will be able to fit
@@ -870,6 +871,7 @@ bool BasicCompositor::BlitRenderTarget(CompositingRenderTarget* aSource,
 Maybe<gfx::IntRect> BasicCompositor::BeginFrameForWindow(
     const nsIntRegion& aInvalidRegion, const Maybe<IntRect>& aClipRect,
     const IntRect& aRenderBounds, const nsIntRegion& aOpaqueRegion) {
+  fprintf(stderr, "BasicCompositor::BeginFrameForWindow %p is_parent = %d content = %d\n", this, XRE_IsParentProcess(), XRE_IsContentProcess());
   if (mIsPendingEndRemoteDrawing) {
     // Force to end previous remote drawing.
     EndRemoteDrawing();
@@ -912,6 +914,7 @@ Maybe<gfx::IntRect> BasicCompositor::BeginFrameForWindow(
   clearRegion.Sub(mInvalidRegion, aOpaqueRegion);
 
   RefPtr<CompositingRenderTarget> target;
+  fprintf(stderr, "      bufferMode=%d\n", bufferMode == BufferMode::BUFFERED);
   if (bufferMode == BufferMode::BUFFERED) {
     // Buffer drawing via a back buffer.
     IntRect backBufferRect = mInvalidRegion.GetBounds();
@@ -1071,6 +1074,7 @@ void BasicCompositor::EndRenderingToNativeLayer() {
 }
 
 void BasicCompositor::EndFrame() {
+  fprintf(stderr, "BasicCompositor::EndFrame() %p\n", this);
   Compositor::EndFrame();
 
   if (mCurrentFrameDest != FrameDestination::NATIVE_LAYERS) {
@@ -1140,6 +1144,8 @@ void BasicCompositor::TryToEndRemoteDrawing() {
 }
 
 void BasicCompositor::EndRemoteDrawing() {
+  fprintf(stderr, "BasicCompositor::EndRemoteDrawing() mFrontBuffer=%p, mRenderTarget = %d\n", mFrontBuffer.get(), !!mRenderTarget);
+  fprintf(stderr, "    thread=%p name=%s\n", PR_GetCurrentThread(), PR_GetThreadName(PR_GetCurrentThread()));
   if (mIsDestroyed || !mRenderTarget) {
     return;
   }
@@ -1164,11 +1170,28 @@ void BasicCompositor::EndRemoteDrawing() {
     mWidget->EndRemoteDrawingInRegion(
         mFrontBuffer, LayoutDeviceIntRegion::FromUnknownRegion(mInvalidRegion));
 
+
+    RefPtr<gfx::SourceSurface> snapshot = mFrontBuffer->Snapshot();
+    if (snapshot) {
+      fprintf(stderr, "    got snapshot %p\n", snapshot.get());
+      RefPtr<gfx::DataSourceSurface> dataSurface = snapshot->GetDataSurface();
+      if (dataSurface)
+        fprintf(stderr, "    got dataSurface %p Stride() = %d\n", dataSurface.get(), dataSurface->Stride());
+    }
+
     mFrontBuffer = nullptr;
   } else {
     mWidget->EndRemoteDrawingInRegion(
         mRenderTarget->mDrawTarget,
         LayoutDeviceIntRegion::FromUnknownRegion(mInvalidRegion));
+    mWidget->RealWidget()->OnFinishedDrawing(mRenderTarget->mDrawTarget.get());
+    RefPtr<gfx::SourceSurface> snapshot = mRenderTarget->mDrawTarget->Snapshot();
+    if (snapshot) {
+      fprintf(stderr, "    got snapshot %p\n", snapshot.get());
+      RefPtr<gfx::DataSourceSurface> dataSurface = snapshot->GetDataSurface();
+      if (dataSurface)
+        fprintf(stderr, "    got dataSurface %p Stride() = %d\n", dataSurface.get(), dataSurface->Stride());
+    }
   }
 
   mRenderTarget = nullptr;

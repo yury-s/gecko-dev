@@ -487,6 +487,7 @@ void VideoStreamEncoder::SetSource(
     rtc::VideoSourceInterface<VideoFrame>* source,
     const VideoSendStream::DegradationPreference& degradation_preference) {
   RTC_DCHECK_RUN_ON(&thread_checker_);
+fprintf(stderr, "*** VideoStreamEncoder::SetSource\n");
   source_proxy_->SetSource(source, degradation_preference);
   encoder_queue_.PostTask([this, degradation_preference] {
     RTC_DCHECK_RUN_ON(&encoder_queue_);
@@ -714,6 +715,7 @@ void VideoStreamEncoder::OnFrame(const VideoFrame& video_frame) {
   }
 
   last_captured_timestamp_ = incoming_frame.ntp_time_ms();
+  fprintf(stderr, "VideoStreamEncoder::OnFrame\n");
   encoder_queue_.PostTask(std::unique_ptr<rtc::QueuedTask>(new EncodeTask(
       incoming_frame, this, rtc::TimeMicros(), log_stats)));
 }
@@ -824,6 +826,7 @@ void VideoStreamEncoder::EncodeVideoFrame(const VideoFrame& video_frame,
 
   overuse_detector_->FrameCaptured(out_frame, time_when_posted_us);
 
+fprintf(stderr, "VideoStreamEncoder::EncodeVideoFrame\n");
   video_sender_.AddVideoFrame(out_frame, nullptr);
 }
 
