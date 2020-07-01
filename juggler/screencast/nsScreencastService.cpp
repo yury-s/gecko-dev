@@ -17,7 +17,7 @@
 #include "webrtc/modules/desktop_capture/desktop_frame.h"
 #include "webrtc/modules/video_capture/video_capture.h"
 #include "mozilla/widget/PlatformWidgetTypes.h"
-#include "VideoEngine.h"
+#include "video_engine/desktop_capture_impl.h"
 
 namespace mozilla {
 
@@ -25,62 +25,55 @@ NS_IMPL_ISUPPORTS(nsScreencastService, nsIScreencastService)
 
 namespace {
 
-class VideoCaptureListener : public rtc::VideoSinkInterface<webrtc::VideoFrame> {
- public:
-  VideoCaptureListener(int32_t capnum) : mCapnum(capnum) {}
+StaticRefPtr<nsScreencastService> gScreencastService;
 
-  // These callbacks end up running on the VideoCapture thread.
-  // From  VideoCaptureCallback
-  void OnFrame(const webrtc::VideoFrame& videoFrame) override {
-    fprintf(stderr, "VideoCaptureListener::OnFrame mCapnum=%d  %dx%d [sz=%ud]\n", mCapnum, videoFrame.width(), videoFrame.height(), videoFrame.size());
-    fprintf(stderr, "    thread=%p name=%s \n", PR_GetCurrentThread(), PR_GetThreadName(PR_GetCurrentThread()));
-  }
-
- private:
-  int32_t mCapnum;
-};
-
-mozilla::camera::VideoEngine* GetWindowVideoEngine() {
-  static RefPtr<mozilla::camera::VideoEngine> engine = []() {
-    auto config = MakeUnique<webrtc::Config>();
-    config->Set<webrtc::CaptureDeviceInfo>(
-        new webrtc::CaptureDeviceInfo(webrtc::CaptureDeviceType::Window));
-    fprintf(stderr, "CreateWindowVideoEngine() \n");
-    return mozilla::camera::VideoEngine::Create(std::move(config));
-  }();
-  return engine.get();
 }
 
-void StartCapturingWindow(const nsCString& windowId) {
-  mozilla::camera::VideoEngine* engine = GetWindowVideoEngine();
-  int numdev = -1;
-  engine->CreateVideoCapture(numdev, windowId.get());
-  fprintf(stderr, "CreateVideoCapture windowId=%s\n", windowId.get());
-  VideoCaptureListener* listener = new VideoCaptureListener(numdev);
-  engine->WithEntry(numdev, [listener](mozilla::camera::VideoEngine::CaptureEntry& cap) {
-    if (!cap.VideoCapture()) {
-      fprintf(stderr, "StartCapturingWindow failed to create VideoCapture\n");
-      return;
-    }
+class nsScreencastService::Session : public rtc::VideoSinkInterface<webrtc::VideoFrame> {
+ public:
+  Session(int sessionId, const nsCString& windowId)
+      : mSessionId(sessionId),
+        mCaptureModule(webrtc::DesktopCaptureImpl::Create(
+            sessionId, windowId.get(), webrtc::CaptureDeviceType::Window)) {
+  }
 
+  bool Start() {
     webrtc::VideoCaptureCapability capability;
     // The size is ignored in fact.
     capability.width = 1280;
     capability.height = 960;
     capability.maxFPS = 24;
     capability.videoType = webrtc::VideoType::kI420;
-    int error = cap.VideoCapture()->StartCapture(capability);
+    int error = mCaptureModule->StartCapture(capability);
     if (error) {
       fprintf(stderr, "StartCapture error %d\n", error);
-      return;
+      return false;
     }
 
-    cap.VideoCapture()->RegisterCaptureDataCallback(listener);
-  });
-}
+    mCaptureModule->RegisterCaptureDataCallback(this);
+    return true;
+  }
 
-StaticRefPtr<nsScreencastService> gScreencastService;
-}
+  void Stop() {
+    mCaptureModule->DeRegisterCaptureDataCallback(this);
+    int error = mCaptureModule->StopCapture();
+    if (error) {
+      fprintf(stderr, "StopCapture error %d\n", error);
+      return;
+    }
+    fprintf(stderr, "nsScreencastService::Session::Stop mSessionId=%d\n", mSessionId);
+  }
+
+  // These callbacks end up running on the VideoCapture thread.
+  void OnFrame(const webrtc::VideoFrame& videoFrame) override {
+    fprintf(stderr, "Session::OnFrame mSessionId=%d  %dx%d [sz=%ud]\n", mSessionId, videoFrame.width(), videoFrame.height(), videoFrame.size());
+  }
+
+ private:
+  int mSessionId;
+  rtc::scoped_refptr<webrtc::VideoCaptureModule> mCaptureModule;
+};
+
 
 // static
 already_AddRefed<nsIScreencastService> nsScreencastService::GetSingleton() {
@@ -96,17 +89,16 @@ already_AddRefed<nsIScreencastService> nsScreencastService::GetSingleton() {
 nsScreencastService::nsScreencastService() = default;
 
 nsScreencastService::~nsScreencastService() {
-  fprintf(stderr, "\n\n\n*********nsScreencastService::~nsScreencastService\n");
-
 }
 
-nsresult nsScreencastService::StartVideoRecording(nsIDocShell* aDocShell, const nsACString& aFileName) {
+nsresult nsScreencastService::StartVideoRecording(nsIDocShell* aDocShell, const nsACString& aFileName, int32_t* sessionId) {
   fprintf(stderr, "nsScreencastService::StartVideoRecording aDocShell=%p NS_IsMainThread() = %d\n", aDocShell, NS_IsMainThread());
   MOZ_RELEASE_ASSERT(NS_IsMainThread(), "Screencast service must be started on the Main thread.");
 
-  webrtc::DesktopCaptureOptions options;
-  std::unique_ptr<webrtc::DesktopCapturer> pWindowCapturer =
-      webrtc::DesktopCapturer::CreateWindowCapturer(std::move(options));
+  *sessionId = -1;
+  // webrtc::DesktopCaptureOptions options;
+  // std::unique_ptr<webrtc::DesktopCapturer> pWindowCapturer =
+  //     webrtc::DesktopCapturer::CreateWindowCapturer(std::move(options));
 
   PresShell* presShell = aDocShell->GetPresShell();
   if (!presShell)
@@ -127,7 +119,13 @@ nsresult nsScreencastService::StartVideoRecording(nsIDocShell* aDocShell, const 
   fprintf(stderr, "    gtkInitData.XWindow()=%lu\n", gtkInitData.XWindow());
   nsCString windowId;
   windowId.AppendPrintf("%lu", gtkInitData.XWindow());
-  StartCapturingWindow(windowId);
+
+  *sessionId = ++mLastSessionId;
+  auto session = std::make_unique<Session>(*sessionId, windowId);
+  if (!session->Start())
+    return NS_ERROR_FAILURE;
+
+  mIdToSession.emplace(*sessionId, std::move(session));
 # else
   // TODO: support in wayland
   return NS_ERROR_NOT_IMPLEMENTED;
@@ -136,8 +134,13 @@ nsresult nsScreencastService::StartVideoRecording(nsIDocShell* aDocShell, const 
   return NS_OK;
 }
 
-nsresult nsScreencastService::StopVideoRecording(nsIDocShell* aDocShell) {
-  fprintf(stderr, "nsScreencastService::StopVideoRecording aDocShell=%p\n", aDocShell);
+nsresult nsScreencastService::StopVideoRecording(int32_t sessionId) {
+  fprintf(stderr, "nsScreencastService::StopVideoRecording sessionId=%d\n", sessionId);
+  auto it = mIdToSession.find(sessionId);
+  if (it == mIdToSession.end())
+    return NS_ERROR_INVALID_ARG;
+  it->second->Stop();
+  mIdToSession.erase(it);
   return NS_OK;
 }
 

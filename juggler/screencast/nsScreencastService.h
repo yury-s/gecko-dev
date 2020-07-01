@@ -5,6 +5,8 @@
 #ifndef JUGGLER_SCREENCAST_NSSCREENCASTSERVICE_H
 #define JUGGLER_SCREENCAST_NSSCREENCASTSERVICE_H
 
+#include <memory>
+#include <unordered_map>
 #include "nsIScreencastService.h"
 
 namespace mozilla {
@@ -20,6 +22,10 @@ class nsScreencastService final : public nsIScreencastService {
 
  private:
   ~nsScreencastService();
+
+  class Session;
+  int mLastSessionId = 0;
+  std::unordered_map<int, std::unique_ptr<Session>> mIdToSession;
 };
 
 }  // namespace mozilla

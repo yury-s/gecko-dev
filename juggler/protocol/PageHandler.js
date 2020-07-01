@@ -90,6 +90,7 @@ class PageHandler {
     this._dialogs = new Map();
 
     this._enabled = false;
+    this._videoSessionId = -1;
   }
 
   _onWorkerCreated({workerId, frameId, url}) {
@@ -291,7 +292,7 @@ class PageHandler {
     `);
     const screencast = Cc['@mozilla.org/juggler/screencast;1'].getService(Ci.nsIScreencastService);
     const docShell = this._pageTarget._gBrowser.ownerGlobal.docShell;
-    screencast.startVideoRecording(docShell, file);
+    this._videoSessionId = screencast.startVideoRecording(docShell, file);
   }
 
   stopVideoRecording() {
@@ -299,8 +300,12 @@ class PageHandler {
     stopVideoRecording
     `);
     const screencast = Cc['@mozilla.org/juggler/screencast;1'].getService(Ci.nsIScreencastService);
-    const docShell = this._pageTarget._gBrowser.ownerGlobal.docShell;
-    screencast.stopVideoRecording(docShell);
+    // const docShell = this._pageTarget._gBrowser.ownerGlobal.docShell;
+    if (!this._videoSessionId)
+      throw new Error('No video recording in progress');
+    const videoSessionId = this._videoSessionId;
+    this._videoSessionId = -1;
+    screencast.stopVideoRecording(videoSessionId);
   }
 }
 
