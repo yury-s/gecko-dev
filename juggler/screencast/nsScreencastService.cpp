@@ -94,11 +94,7 @@ nsScreencastService::~nsScreencastService() {
 nsresult nsScreencastService::StartVideoRecording(nsIDocShell* aDocShell, const nsACString& aFileName, int32_t* sessionId) {
   fprintf(stderr, "nsScreencastService::StartVideoRecording aDocShell=%p NS_IsMainThread() = %d\n", aDocShell, NS_IsMainThread());
   MOZ_RELEASE_ASSERT(NS_IsMainThread(), "Screencast service must be started on the Main thread.");
-
   *sessionId = -1;
-  // webrtc::DesktopCaptureOptions options;
-  // std::unique_ptr<webrtc::DesktopCapturer> pWindowCapturer =
-  //     webrtc::DesktopCapturer::CreateWindowCapturer(std::move(options));
 
   PresShell* presShell = aDocShell->GetPresShell();
   if (!presShell)

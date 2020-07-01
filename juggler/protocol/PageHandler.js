@@ -299,12 +299,12 @@ class PageHandler {
     dump(`
     stopVideoRecording
     `);
-    const screencast = Cc['@mozilla.org/juggler/screencast;1'].getService(Ci.nsIScreencastService);
-    // const docShell = this._pageTarget._gBrowser.ownerGlobal.docShell;
     if (!this._videoSessionId)
       throw new Error('No video recording in progress');
     const videoSessionId = this._videoSessionId;
     this._videoSessionId = -1;
+
+    const screencast = Cc['@mozilla.org/juggler/screencast;1'].getService(Ci.nsIScreencastService);
     screencast.stopVideoRecording(videoSessionId);
   }
 }

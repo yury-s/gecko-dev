@@ -516,15 +516,6 @@ class nsIWidget : public nsISupports {
   virtual void SetWidgetListener(nsIWidgetListener* alistener) = 0;
   //@}
 
-  using DrawingListener = std::function<void(mozilla::gfx::DrawTarget*)>;
-  void SetDrawingListener(DrawingListener&& listener) {
-    mDrawingListener = std::move(listener);
-  }
-  void OnFinishedDrawing(mozilla::gfx::DrawTarget* aDrawTarget) {
-    if (mDrawingListener)
-      mDrawingListener(aDrawTarget);
-  }
-
   /**
    * Close and destroy the internal native window.
    * This method does not delete the widget.
@@ -2169,7 +2160,6 @@ class nsIWidget : public nsISupports {
   bool mOnDestroyCalled;
   nsWindowType mWindowType;
   int32_t mZIndex;
-  DrawingListener mDrawingListener;
 };
 
 NS_DEFINE_STATIC_IID_ACCESSOR(nsIWidget, NS_IWIDGET_IID)

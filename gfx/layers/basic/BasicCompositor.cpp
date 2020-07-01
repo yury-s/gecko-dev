@@ -218,9 +218,6 @@ BasicCompositor::BasicCompositor(CompositorBridgeParent* aParent,
       mIsPendingEndRemoteDrawing(false),
       mFullWindowRenderTarget(nullptr) {
   MOZ_COUNT_CTOR(BasicCompositor);
-fprintf(stderr, "BasicCompositor::BasicCompositor\n");
-fprintf(stderr, "    thread=%p name=%s \n", PR_GetCurrentThread(), PR_GetThreadName(PR_GetCurrentThread()));
-fprintf(stderr, "    NS_IsInCompositorThread()=%d\n", NS_IsInCompositorThread());
 
   // The widget backends may create intermediate Cairo surfaces to deal with
   // various window buffers, regardless of actual content backend type, when
@@ -1166,14 +1163,12 @@ void BasicCompositor::EndRemoteDrawing() {
 
     mWidget->EndRemoteDrawingInRegion(
         mFrontBuffer, LayoutDeviceIntRegion::FromUnknownRegion(mInvalidRegion));
-    mWidget->RealWidget()->OnFinishedDrawing(mFrontBuffer.get());
 
     mFrontBuffer = nullptr;
   } else {
     mWidget->EndRemoteDrawingInRegion(
         mRenderTarget->mDrawTarget,
         LayoutDeviceIntRegion::FromUnknownRegion(mInvalidRegion));
-    mWidget->RealWidget()->OnFinishedDrawing(mRenderTarget->mDrawTarget.get());
   }
 
   mRenderTarget = nullptr;
