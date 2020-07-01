@@ -115,18 +115,17 @@ nsresult nsScreencastService::StartVideoRecording(nsIDocShell* aDocShell, const 
   fprintf(stderr, "    gtkInitData.XWindow()=%lu\n", gtkInitData.XWindow());
   nsCString windowId;
   windowId.AppendPrintf("%lu", gtkInitData.XWindow());
-
+# else
+  // TODO: support in wayland
+  return NS_ERROR_NOT_IMPLEMENTED;
+# endif
+#endif
   *sessionId = ++mLastSessionId;
   auto session = std::make_unique<Session>(*sessionId, windowId);
   if (!session->Start())
     return NS_ERROR_FAILURE;
 
   mIdToSession.emplace(*sessionId, std::move(session));
-# else
-  // TODO: support in wayland
-  return NS_ERROR_NOT_IMPLEMENTED;
-# endif
-#endif
   return NS_OK;
 }
 
