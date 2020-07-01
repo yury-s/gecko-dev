@@ -23,7 +23,63 @@ namespace mozilla {
 
 NS_IMPL_ISUPPORTS(nsScreencastService, nsIScreencastService)
 
-static StaticRefPtr<nsScreencastService> gScreencastService;
+namespace {
+
+class VideoCaptureListener : public rtc::VideoSinkInterface<webrtc::VideoFrame> {
+ public:
+  VideoCaptureListener(int32_t capnum) : mCapnum(capnum) {}
+
+  // These callbacks end up running on the VideoCapture thread.
+  // From  VideoCaptureCallback
+  void OnFrame(const webrtc::VideoFrame& videoFrame) override {
+    fprintf(stderr, "VideoCaptureListener::OnFrame mCapnum=%d  %dx%d [sz=%ud]\n", mCapnum, videoFrame.width(), videoFrame.height(), videoFrame.size());
+  }
+
+ private:
+  int32_t mCapnum;
+};
+
+mozilla::camera::VideoEngine* GetWindowVideoEngine() {
+  static RefPtr<mozilla::camera::VideoEngine> engine = []() {
+    auto config = MakeUnique<webrtc::Config>();
+    config->Set<webrtc::CaptureDeviceInfo>(
+        new webrtc::CaptureDeviceInfo(webrtc::CaptureDeviceType::Window));
+    fprintf(stderr, "CreateWindowVideoEngine() \n");
+    return mozilla::camera::VideoEngine::Create(std::move(config));
+  }();
+  return engine.get();
+}
+
+void StartCapturingWindow(const nsCString& windowId) {
+  mozilla::camera::VideoEngine* engine = GetWindowVideoEngine();
+  int numdev = -1;
+  engine->CreateVideoCapture(numdev, windowId.get());
+  fprintf(stderr, "CreateVideoCapture windowId=%s\n", windowId.get());
+  VideoCaptureListener* listener = new VideoCaptureListener(numdev);
+  engine->WithEntry(numdev, [listener](mozilla::camera::VideoEngine::CaptureEntry& cap) {
+    if (!cap.VideoCapture()) {
+      fprintf(stderr, "StartCapturingWindow failed to create VideoCapture\n");
+      return;
+    }
+
+    webrtc::VideoCaptureCapability capability;
+    // The size is ignored in fact.
+    capability.width = 1280;
+    capability.height = 960;
+    capability.maxFPS = 24;
+    capability.videoType = webrtc::VideoType::kI420;
+    int error = cap.VideoCapture()->StartCapture(capability);
+    if (error) {
+      fprintf(stderr, "StartCapture error %d\n", error);
+      return;
+    }
+
+    cap.VideoCapture()->RegisterCaptureDataCallback(listener);
+  });
+}
+
+StaticRefPtr<nsScreencastService> gScreencastService;
+}
 
 // static
 already_AddRefed<nsIScreencastService> nsScreencastService::GetSingleton() {
@@ -41,28 +97,6 @@ nsScreencastService::nsScreencastService() = default;
 nsScreencastService::~nsScreencastService() {
   fprintf(stderr, "\n\n\n*********nsScreencastService::~nsScreencastService\n");
 
-}
-
-static mozilla::camera::VideoEngine* GetWindowVideoEngine() {
-  static RefPtr<mozilla::camera::VideoEngine> engine = []() {
-    auto config = MakeUnique<webrtc::Config>();
-    config->Set<webrtc::CaptureDeviceInfo>(
-        new webrtc::CaptureDeviceInfo(webrtc::CaptureDeviceType::Window));
-    fprintf(stderr, "CreateWindowVideoEngine() \n");
-    return mozilla::camera::VideoEngine::Create(std::move(config));
-  }();
-  return engine.get();
-}
-
-static void StartCapturingWindow(const nsCString& windowId) {
-  mozilla::camera::VideoEngine* engine = GetWindowVideoEngine();
-  int numdev = -1;
-  engine->CreateVideoCapture(numdev, windowId.get());
-  fprintf(stderr, "CreateVideoCapture windowId=%s\n", windowId.get());
-  engine->WithEntry(numdev, [](mozilla::camera::VideoEngine::CaptureEntry& cap) {
-    fprintf(stderr, "StartCapturingWindow with entry %d\n", !!cap.VideoCapture());
-
-  });
 }
 
 nsresult nsScreencastService::StartVideoRecording(nsIDocShell* aDocShell, const nsACString& aFileName) {
