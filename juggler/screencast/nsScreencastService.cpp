@@ -33,6 +33,7 @@ class VideoCaptureListener : public rtc::VideoSinkInterface<webrtc::VideoFrame> 
   // From  VideoCaptureCallback
   void OnFrame(const webrtc::VideoFrame& videoFrame) override {
     fprintf(stderr, "VideoCaptureListener::OnFrame mCapnum=%d  %dx%d [sz=%ud]\n", mCapnum, videoFrame.width(), videoFrame.height(), videoFrame.size());
+    fprintf(stderr, "    thread=%p name=%s \n", PR_GetCurrentThread(), PR_GetThreadName(PR_GetCurrentThread()));
   }
 
  private:
@@ -132,24 +133,6 @@ nsresult nsScreencastService::StartVideoRecording(nsIDocShell* aDocShell, const 
   return NS_ERROR_NOT_IMPLEMENTED;
 # endif
 #endif
-  widget->SetDrawingListener([] (mozilla::gfx::DrawTarget* drawTarget) {
-    MOZ_RELEASE_ASSERT(NS_IsInCompositorThread(), "Screencast drawing listener is expected to be called on the Compositor thread.");
-    fprintf(stderr, "DrawingListener drawTarget=%p\n", drawTarget);
-    RefPtr<gfx::SourceSurface> snapshot = drawTarget->Snapshot();
-    if (!snapshot)
-      return;
-
-    // fprintf(stderr, "    GetBackendType()=%hhd\n", drawTarget->GetBackendType());
-    // fprintf(stderr, "    type=%hhd\n", snapshot->GetType());
-    // fprintf(stderr, "    format=%hhd\n", snapshot->GetFormat());
-    fprintf(stderr, "    size=%d x %d\n", snapshot->GetSize().width, snapshot->GetSize().height);
-    RefPtr<gfx::DataSourceSurface> dataSurface = snapshot->GetDataSurface();
-    if (dataSurface)
-      fprintf(stderr, "    got dataSurface %p Stride() = %d\n", dataSurface.get(), dataSurface->Stride());
-  });
-//    nsWindow.h
-// GetLayerManager
-// GetCompositor
   return NS_OK;
 }
 
