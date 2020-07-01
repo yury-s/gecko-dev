@@ -18,6 +18,13 @@ XPCOM_MANIFESTS += [
     'components.conf',
 ]
 
+LOCAL_INCLUDES += [
+    '/media/libyuv/libyuv/include',
+    '/media/webrtc/trunk',
+    '/media/webrtc/trunk/webrtc',
+]
+
+include('/media/webrtc/webrtc.mozbuild')
 include('/ipc/chromium/chromium-config.mozbuild')
 
 FINAL_LIBRARY = 'xul'

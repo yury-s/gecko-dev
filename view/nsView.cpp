@@ -1065,6 +1065,7 @@ void nsView::DidCompositeWindow(mozilla::layers::TransactionId aTransactionId,
                                 const TimeStamp& aCompositeStart,
                                 const TimeStamp& aCompositeEnd) {
   PresShell* presShell = mViewManager->GetPresShell();
+  fprintf(stderr, "nsView::DidCompositeWindow NS_IsMainThread = %d, XRE_IsParentProcess() = %d, NS_IsInCompositorThread() = %d\n", NS_IsMainThread(), XRE_IsParentProcess(), NS_IsInCompositorThread());
   if (!presShell) {
     return;
   }

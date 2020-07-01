@@ -485,6 +485,9 @@ nsWindow::nsWindow() {
 
   mIsAccelerated = false;
   fprintf(stderr, "___nsWindow::nsWindow() %p\n", this);
+  fprintf(stderr, "    thread=%p name=%s\n", PR_GetCurrentThread(), PR_GetThreadName(PR_GetCurrentThread()));
+  fprintf(stderr, "    NS_IsMainThread()=%d\n", NS_IsMainThread());
+  fprintf(stderr, "    NS_IsInCompositorThread()=%d\n", NS_IsInCompositorThread());
 }
 
 nsWindow::~nsWindow() {
@@ -4674,6 +4677,8 @@ nsresult nsWindow::Create(nsIWidget* aParent, nsNativeWidget aNativeParent,
   if (mIsX11Display && mGdkWindow) {
     mXDisplay = GDK_WINDOW_XDISPLAY(mGdkWindow);
     mXWindow = gdk_x11_window_get_xid(mGdkWindow);
+    fprintf(stderr, "========== nsWindow create mXWindow=%lu X11None=%lu\n", mXWindow, X11None);
+
 
     GdkVisual* gdkVisual = gdk_window_get_visual(mGdkWindow);
     mXVisual = gdk_x11_visual_get_xvisual(gdkVisual);

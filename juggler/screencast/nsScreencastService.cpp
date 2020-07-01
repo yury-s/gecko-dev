@@ -8,8 +8,16 @@
 #include "mozilla/PresShell.h"
 #include "mozilla/StaticPtr.h"
 #include "nsIDocShell.h"
+#include "nsThreadManager.h"
 #include "nsView.h"
 #include "nsViewManager.h"
+#include "webrtc/modules/desktop_capture/desktop_capturer.h"
+#include "webrtc/modules/desktop_capture/desktop_capture_options.h"
+#include "webrtc/modules/desktop_capture/desktop_device_info.h"
+#include "webrtc/modules/desktop_capture/desktop_frame.h"
+#include "webrtc/modules/video_capture/video_capture.h"
+#include "mozilla/widget/PlatformWidgetTypes.h"
+#include "VideoEngine.h"
 
 namespace mozilla {
 
@@ -35,9 +43,35 @@ nsScreencastService::~nsScreencastService() {
 
 }
 
+static mozilla::camera::VideoEngine* GetWindowVideoEngine() {
+  static RefPtr<mozilla::camera::VideoEngine> engine = []() {
+    auto config = MakeUnique<webrtc::Config>();
+    config->Set<webrtc::CaptureDeviceInfo>(
+        new webrtc::CaptureDeviceInfo(webrtc::CaptureDeviceType::Window));
+    fprintf(stderr, "CreateWindowVideoEngine() \n");
+    return mozilla::camera::VideoEngine::Create(std::move(config));
+  }();
+  return engine.get();
+}
+
+static void StartCapturingWindow(const nsCString& windowId) {
+  mozilla::camera::VideoEngine* engine = GetWindowVideoEngine();
+  int numdev = -1;
+  engine->CreateVideoCapture(numdev, windowId.get());
+  fprintf(stderr, "CreateVideoCapture windowId=%s\n", windowId.get());
+  engine->WithEntry(numdev, [](mozilla::camera::VideoEngine::CaptureEntry& cap) {
+    fprintf(stderr, "StartCapturingWindow with entry %d\n", !!cap.VideoCapture());
+
+  });
+}
+
 nsresult nsScreencastService::StartVideoRecording(nsIDocShell* aDocShell, const nsACString& aFileName) {
-  fprintf(stderr, "nsScreencastService::StartVideoRecording aDocShell=%p\n", aDocShell);
-  fprintf(stderr, "    thread=%p name=%s\n", PR_GetCurrentThread(), PR_GetThreadName(PR_GetCurrentThread()));
+  fprintf(stderr, "nsScreencastService::StartVideoRecording aDocShell=%p NS_IsMainThread() = %d\n", aDocShell, NS_IsMainThread());
+  MOZ_RELEASE_ASSERT(NS_IsMainThread(), "Screencast service must be started on the Main thread.");
+
+  webrtc::DesktopCaptureOptions options;
+  std::unique_ptr<webrtc::DesktopCapturer> pWindowCapturer =
+      webrtc::DesktopCapturer::CreateWindowCapturer(std::move(options));
 
   PresShell* presShell = aDocShell->GetPresShell();
   if (!presShell)
@@ -49,9 +83,35 @@ nsresult nsScreencastService::StartVideoRecording(nsIDocShell* aDocShell, const 
   if (!view)
     return NS_ERROR_UNEXPECTED;
   nsIWidget* widget = view->GetWidget();
-  fprintf(stderr, "    widget=%p\n", widget);
-  widget->SetDrawingListener([widget] (mozilla::gfx::DrawTarget* drawingTarget) {
-    fprintf(stderr, "    DrawingListener drawingTarget=%p\n", drawingTarget);
+
+#ifdef MOZ_WIDGET_GTK
+  mozilla::widget::CompositorWidgetInitData initData;
+  widget->GetCompositorWidgetInitData(&initData);
+  const mozilla::widget::GtkCompositorWidgetInitData& gtkInitData = initData.get_GtkCompositorWidgetInitData();
+# ifdef MOZ_X11
+  fprintf(stderr, "    gtkInitData.XWindow()=%lu\n", gtkInitData.XWindow());
+  nsCString windowId;
+  windowId.AppendPrintf("%lu", gtkInitData.XWindow());
+  StartCapturingWindow(windowId);
+# else
+  // TODO: support in wayland
+  return NS_ERROR_NOT_IMPLEMENTED;
+# endif
+#endif
+  widget->SetDrawingListener([] (mozilla::gfx::DrawTarget* drawTarget) {
+    MOZ_RELEASE_ASSERT(NS_IsInCompositorThread(), "Screencast drawing listener is expected to be called on the Compositor thread.");
+    fprintf(stderr, "DrawingListener drawTarget=%p\n", drawTarget);
+    RefPtr<gfx::SourceSurface> snapshot = drawTarget->Snapshot();
+    if (!snapshot)
+      return;
+
+    // fprintf(stderr, "    GetBackendType()=%hhd\n", drawTarget->GetBackendType());
+    // fprintf(stderr, "    type=%hhd\n", snapshot->GetType());
+    // fprintf(stderr, "    format=%hhd\n", snapshot->GetFormat());
+    fprintf(stderr, "    size=%d x %d\n", snapshot->GetSize().width, snapshot->GetSize().height);
+    RefPtr<gfx::DataSourceSurface> dataSurface = snapshot->GetDataSurface();
+    if (dataSurface)
+      fprintf(stderr, "    got dataSurface %p Stride() = %d\n", dataSurface.get(), dataSurface->Stride());
   });
 //    nsWindow.h
 // GetLayerManager
