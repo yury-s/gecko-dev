@@ -4,6 +4,7 @@
 
 #include "nsScreencastService.h"
 
+#include "ScreencastEncoder.h"
 #include "mozilla/ClearOnShutdown.h"
 #include "mozilla/PresShell.h"
 #include "mozilla/StaticPtr.h"
@@ -31,10 +32,11 @@ StaticRefPtr<nsScreencastService> gScreencastService;
 
 class nsScreencastService::Session : public rtc::VideoSinkInterface<webrtc::VideoFrame> {
  public:
-  Session(int sessionId, const nsCString& windowId)
-      : mSessionId(sessionId),
-        mCaptureModule(webrtc::DesktopCaptureImpl::Create(
-            sessionId, windowId.get(), webrtc::CaptureDeviceType::Window)) {
+  Session(int sessionId, const nsCString& windowId, RefPtr<ScreencastEncoder>&& encoder)
+      : mSessionId(sessionId)
+      , mCaptureModule(webrtc::DesktopCaptureImpl::Create(
+            sessionId, windowId.get(), webrtc::CaptureDeviceType::Window))
+      , mEncoder(std::move(encoder)) {
   }
 
   bool Start() {
@@ -67,11 +69,13 @@ class nsScreencastService::Session : public rtc::VideoSinkInterface<webrtc::Vide
   // These callbacks end up running on the VideoCapture thread.
   void OnFrame(const webrtc::VideoFrame& videoFrame) override {
     fprintf(stderr, "Session::OnFrame mSessionId=%d  %dx%d [sz=%ud]\n", mSessionId, videoFrame.width(), videoFrame.height(), videoFrame.size());
+    mEncoder->encodeFrame(videoFrame);
   }
 
  private:
   int mSessionId;
   rtc::scoped_refptr<webrtc::VideoCaptureModule> mCaptureModule;
+  RefPtr<ScreencastEncoder> mEncoder;
 };
 
 
@@ -121,7 +125,14 @@ nsresult nsScreencastService::StartVideoRecording(nsIDocShell* aDocShell, const 
 # endif
 #endif
   *sessionId = ++mLastSessionId;
-  auto session = std::make_unique<Session>(*sessionId, windowId);
+  nsCString error;
+  RefPtr<ScreencastEncoder> encoder = ScreencastEncoder::create(error, PromiseFlatCString(aFileName), 1280, 960, Nothing());
+  if (!encoder) {
+    fprintf(stderr, "Failed to create ScreencastEncoder: %s\n", error.get());
+    return NS_ERROR_FAILURE;
+  }
+
+  auto session = std::make_unique<Session>(*sessionId, windowId, std::move(encoder));
   if (!session->Start())
     return NS_ERROR_FAILURE;
 

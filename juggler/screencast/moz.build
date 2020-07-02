@@ -12,6 +12,7 @@ XPIDL_MODULE = 'jugglerscreencast'
 
 SOURCES += [
     'nsScreencastService.cpp',
+    'ScreencastEncoder.cpp',
 ]
 
 XPCOM_MANIFESTS += [
