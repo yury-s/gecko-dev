@@ -23,8 +23,15 @@ class HeadlessCompositorWidget final : public CompositorWidget,
                            HeadlessWidget* aWindow);
 
   void NotifyClientSizeChanged(const LayoutDeviceIntSize& aClientSize);
+  void SetSnapshotListener(HeadlessWidget::SnapshotListener&& listener);
 
   // CompositorWidget Overrides
+
+  already_AddRefed<gfx::DrawTarget> StartRemoteDrawingInRegion(
+      LayoutDeviceIntRegion& aInvalidRegion, layers::BufferMode* aBufferMode) override;
+  void EndRemoteDrawingInRegion(
+      gfx::DrawTarget* aDrawTarget,
+      const LayoutDeviceIntRegion& aInvalidRegion) override;
 
   uintptr_t GetWidgetKey() override;
 
@@ -42,9 +49,15 @@ class HeadlessCompositorWidget final : public CompositorWidget,
   }
 
  private:
+  void SetSnapshotListenerOnCompositorThread(HeadlessWidget::SnapshotListener&& listener);
+  void UpdateDrawTarget();
+
   HeadlessWidget* mWidget;
 
   LayoutDeviceIntSize mClientSize;
+
+  HeadlessWidget::SnapshotListener mSnapshotListener;
+  RefPtr<gfx::DrawTarget> mDrawTarget;
 };
 
 }  // namespace widget
