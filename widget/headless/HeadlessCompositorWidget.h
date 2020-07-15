@@ -29,9 +29,6 @@ class HeadlessCompositorWidget final : public CompositorWidget,
 
   already_AddRefed<gfx::DrawTarget> StartRemoteDrawingInRegion(
       LayoutDeviceIntRegion& aInvalidRegion, layers::BufferMode* aBufferMode) override;
-  void EndRemoteDrawingInRegion(
-      gfx::DrawTarget* aDrawTarget,
-      const LayoutDeviceIntRegion& aInvalidRegion) override;
 
   uintptr_t GetWidgetKey() override;
 
@@ -51,6 +48,7 @@ class HeadlessCompositorWidget final : public CompositorWidget,
  private:
   void SetSnapshotListenerOnCompositorThread(HeadlessWidget::SnapshotListener&& listener);
   void UpdateDrawTarget();
+  void PeriodicSnapshot();
 
   HeadlessWidget* mWidget;
 

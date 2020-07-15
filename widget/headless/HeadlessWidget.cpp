@@ -104,6 +104,8 @@ void HeadlessWidget::Destroy() {
     }
   }
 
+  SetSnapshotListener(nullptr);
+
   nsBaseWidget::OnDestroy();
 
   nsBaseWidget::Destroy();

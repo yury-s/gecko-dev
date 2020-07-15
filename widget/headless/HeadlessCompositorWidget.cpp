@@ -31,6 +31,7 @@ void HeadlessCompositorWidget::SetSnapshotListenerOnCompositorThread(HeadlessWid
   MOZ_ASSERT(NS_IsInCompositorThread());
   mSnapshotListener = std::move(listener);
   UpdateDrawTarget();
+  PeriodicSnapshot();
 }
 
 already_AddRefed<gfx::DrawTarget> HeadlessCompositorWidget::StartRemoteDrawingInRegion(
@@ -41,29 +42,6 @@ already_AddRefed<gfx::DrawTarget> HeadlessCompositorWidget::StartRemoteDrawingIn
   *aBufferMode = layers::BufferMode::BUFFER_NONE;
   RefPtr<gfx::DrawTarget> result = mDrawTarget;
   return result.forget();
-}
-
-void HeadlessCompositorWidget::EndRemoteDrawingInRegion(
-    gfx::DrawTarget* aDrawTarget, const LayoutDeviceIntRegion& aInvalidRegion) {
-  if (!mDrawTarget)
-    return;
-
-  if (!mSnapshotListener)
-    return;
-
-  RefPtr<gfx::SourceSurface> snapshot = mDrawTarget->Snapshot();
-  if (!snapshot) {
-    fprintf(stderr, "Failed to get snapshot of draw target\n");
-    return;
-  }
-
-  RefPtr<gfx::DataSourceSurface> dataSurface = snapshot->GetDataSurface();
-  if (!dataSurface) {
-    fprintf(stderr, "Failed to get data surface from snapshot\n");
-    return;
-  }
-
-  mSnapshotListener(std::move(dataSurface));
 }
 
 void HeadlessCompositorWidget::ObserveVsync(VsyncObserver* aObserver) {
@@ -97,6 +75,32 @@ void HeadlessCompositorWidget::UpdateDrawTarget() {
   // TODO: this is called on Main thread, while Start/End drawing are on Compositor thread.
   mDrawTarget = mozilla::gfx::Factory::CreateDrawTarget(
       mozilla::gfx::BackendType::SKIA, size, format);
+}
+
+void HeadlessCompositorWidget::PeriodicSnapshot() {
+  if (!mDrawTarget)
+    return;
+
+  if (!mSnapshotListener)
+    return;
+
+  RefPtr<gfx::SourceSurface> snapshot = mDrawTarget->Snapshot();
+  if (!snapshot) {
+    fprintf(stderr, "Failed to get snapshot of draw target\n");
+    return;
+  }
+
+  RefPtr<gfx::DataSourceSurface> dataSurface = snapshot->GetDataSurface();
+  if (!dataSurface) {
+    fprintf(stderr, "Failed to get data surface from snapshot\n");
+    return;
+  }
+
+  mSnapshotListener(std::move(dataSurface));
+
+  NS_DelayedDispatchToCurrentThread(NewRunnableMethod(
+      "HeadlessCompositorWidget::PeriodicSnapshot", this,
+      &HeadlessCompositorWidget::PeriodicSnapshot), 40);
 }
 
 LayoutDeviceIntSize HeadlessCompositorWidget::GetClientSize() {
