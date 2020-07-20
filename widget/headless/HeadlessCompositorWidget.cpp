@@ -21,16 +21,17 @@ HeadlessCompositorWidget::HeadlessCompositorWidget(
 void HeadlessCompositorWidget::SetSnapshotListener(HeadlessWidget::SnapshotListener&& listener) {
   MOZ_ASSERT(NS_IsMainThread());
 
-  layers::CompositorThread()->Dispatch(NewRunnableMethod<HeadlessWidget::SnapshotListener&&>(
+  layers::CompositorThread()->Dispatch(NewRunnableMethod<HeadlessWidget::SnapshotListener&&, LayoutDeviceIntSize>(
       "HeadlessCompositorWidget::SetSnapshotListener", this,
       &HeadlessCompositorWidget::SetSnapshotListenerOnCompositorThread,
-      std::move(listener)));
+      std::move(listener), mClientSize));
 }
 
-void HeadlessCompositorWidget::SetSnapshotListenerOnCompositorThread(HeadlessWidget::SnapshotListener&& listener) {
+void HeadlessCompositorWidget::SetSnapshotListenerOnCompositorThread(
+    HeadlessWidget::SnapshotListener&& listener, const LayoutDeviceIntSize& aClientSize) {
   MOZ_ASSERT(NS_IsInCompositorThread());
   mSnapshotListener = std::move(listener);
-  UpdateDrawTarget();
+  UpdateDrawTarget(aClientSize);
   PeriodicSnapshot();
 }
 
@@ -56,25 +57,34 @@ nsIWidget* HeadlessCompositorWidget::RealWidget() { return mWidget; }
 void HeadlessCompositorWidget::NotifyClientSizeChanged(
     const LayoutDeviceIntSize& aClientSize) {
   mClientSize = aClientSize;
-  UpdateDrawTarget();
+  layers::CompositorThread()->Dispatch(NewRunnableMethod<LayoutDeviceIntSize>(
+      "HeadlessCompositorWidget::UpdateDrawTarget", this,
+      &HeadlessCompositorWidget::UpdateDrawTarget,
+      aClientSize));
 }
 
-void HeadlessCompositorWidget::UpdateDrawTarget() {
+void HeadlessCompositorWidget::UpdateDrawTarget(const LayoutDeviceIntSize& aClientSize) {
+  MOZ_ASSERT(NS_IsInCompositorThread());
   if (!mSnapshotListener) {
     mDrawTarget = nullptr;
     return;
   }
 
-  if (mClientSize.IsEmpty()) {
+  if (aClientSize.IsEmpty()) {
     mDrawTarget = nullptr;
     return;
   }
 
+  RefPtr<gfx::DrawTarget> old = std::move(mDrawTarget);
   gfx::SurfaceFormat format = gfx::SurfaceFormat::B8G8R8A8;
-  gfx::IntSize size = mClientSize.ToUnknownSize();
-  // TODO: this is called on Main thread, while Start/End drawing are on Compositor thread.
+  gfx::IntSize size = aClientSize.ToUnknownSize();
   mDrawTarget = mozilla::gfx::Factory::CreateDrawTarget(
       mozilla::gfx::BackendType::SKIA, size, format);
+  if (old) {
+    RefPtr<gfx::SourceSurface> snapshot = old->Snapshot();
+    if (snapshot)
+      mDrawTarget->CopySurface(snapshot.get(), old->GetRect(), gfx::IntPoint(0, 0));
+  }
 }
 
 void HeadlessCompositorWidget::PeriodicSnapshot() {
