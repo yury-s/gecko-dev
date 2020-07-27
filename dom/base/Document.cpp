@@ -3216,6 +3216,9 @@ void Document::SendToConsole(nsCOMArray<nsISecurityConsoleMessage>& aMessages) {
 }
 
 void Document::ApplySettingsFromCSP(bool aSpeculative) {
+  if (mDocumentContainer && mDocumentContainer->IsBypassCSPEnabled())
+    return;
+
   nsresult rv = NS_OK;
   if (!aSpeculative) {
     // 1) apply settings from regular CSP
@@ -3267,6 +3270,11 @@ nsresult Document::InitCSP(nsIChannel* aChannel) {
   if (!StaticPrefs::security_csp_enable()) {
     MOZ_LOG(gCspPRLog, LogLevel::Debug,
             ("CSP is disabled, skipping CSP init for document %p", this));
+    return NS_OK;
+  }
+
+  nsCOMPtr<nsIDocShell> shell(mDocumentContainer);
+  if (shell && nsDocShell::Cast(shell)->IsBypassCSPEnabled()) {
     return NS_OK;
   }
 
@@ -4028,6 +4036,10 @@ bool Document::HasFocus(ErrorResult& rv) const {
   if (!fm) {
     rv.Throw(NS_ERROR_NOT_AVAILABLE);
     return false;
+  }
+
+  if (IsActive() && mDocumentContainer->ShouldOverrideHasFocus()) {
+    return true;
   }
 
   // Is there a focused DOMWindow?
