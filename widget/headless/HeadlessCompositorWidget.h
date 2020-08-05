@@ -47,10 +47,10 @@ class HeadlessCompositorWidget final : public CompositorWidget,
 
  private:
   void SetSnapshotListenerOnCompositorThread(
-      HeadlessWidget::SnapshotListener&& listener,
-      const LayoutDeviceIntSize& aClientSize);
+      HeadlessWidget::SnapshotListener&& listener);
   void UpdateDrawTarget(const LayoutDeviceIntSize& aClientSize);
   void PeriodicSnapshot();
+  void TakeSnapshot();
 
   HeadlessWidget* mWidget;
 

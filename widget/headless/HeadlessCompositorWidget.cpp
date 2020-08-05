@@ -21,17 +21,16 @@ HeadlessCompositorWidget::HeadlessCompositorWidget(
 void HeadlessCompositorWidget::SetSnapshotListener(HeadlessWidget::SnapshotListener&& listener) {
   MOZ_ASSERT(NS_IsMainThread());
 
-  layers::CompositorThread()->Dispatch(NewRunnableMethod<HeadlessWidget::SnapshotListener&&, LayoutDeviceIntSize>(
+  layers::CompositorThread()->Dispatch(NewRunnableMethod<HeadlessWidget::SnapshotListener&&>(
       "HeadlessCompositorWidget::SetSnapshotListener", this,
       &HeadlessCompositorWidget::SetSnapshotListenerOnCompositorThread,
-      std::move(listener), mClientSize));
+      std::move(listener)));
 }
 
 void HeadlessCompositorWidget::SetSnapshotListenerOnCompositorThread(
-    HeadlessWidget::SnapshotListener&& listener, const LayoutDeviceIntSize& aClientSize) {
+    HeadlessWidget::SnapshotListener&& listener) {
   MOZ_ASSERT(NS_IsInCompositorThread());
   mSnapshotListener = std::move(listener);
-  UpdateDrawTarget(aClientSize);
   PeriodicSnapshot();
 }
 
@@ -65,11 +64,6 @@ void HeadlessCompositorWidget::NotifyClientSizeChanged(
 
 void HeadlessCompositorWidget::UpdateDrawTarget(const LayoutDeviceIntSize& aClientSize) {
   MOZ_ASSERT(NS_IsInCompositorThread());
-  if (!mSnapshotListener) {
-    mDrawTarget = nullptr;
-    return;
-  }
-
   if (aClientSize.IsEmpty()) {
     mDrawTarget = nullptr;
     return;
@@ -88,10 +82,17 @@ void HeadlessCompositorWidget::UpdateDrawTarget(const LayoutDeviceIntSize& aClie
 }
 
 void HeadlessCompositorWidget::PeriodicSnapshot() {
-  if (!mDrawTarget)
+  if (!mSnapshotListener)
     return;
 
-  if (!mSnapshotListener)
+  TakeSnapshot();
+  NS_DelayedDispatchToCurrentThread(NewRunnableMethod(
+      "HeadlessCompositorWidget::PeriodicSnapshot", this,
+      &HeadlessCompositorWidget::PeriodicSnapshot), 40);
+}
+
+void HeadlessCompositorWidget::TakeSnapshot() {
+  if (!mDrawTarget)
     return;
 
   RefPtr<gfx::SourceSurface> snapshot = mDrawTarget->Snapshot();
@@ -107,10 +108,6 @@ void HeadlessCompositorWidget::PeriodicSnapshot() {
   }
 
   mSnapshotListener(std::move(dataSurface));
-
-  NS_DelayedDispatchToCurrentThread(NewRunnableMethod(
-      "HeadlessCompositorWidget::PeriodicSnapshot", this,
-      &HeadlessCompositorWidget::PeriodicSnapshot), 40);
 }
 
 LayoutDeviceIntSize HeadlessCompositorWidget::GetClientSize() {
