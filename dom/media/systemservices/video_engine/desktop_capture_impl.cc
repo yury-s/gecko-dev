@@ -658,8 +658,11 @@ void DesktopCaptureImpl::OnCaptureResult(DesktopCapturer::Result result,
 
   size_t videoFrameStride =
       frameInfo.width * DesktopFrame::kBytesPerPixel;
-  for (auto rawFrameCallback : _rawFrameCallbacks) {
-    rawFrameCallback->OnRawFrame(videoFrame, videoFrameStride, frameInfo);
+  {
+    rtc::CritScope cs(&_apiCs);
+    for (auto rawFrameCallback : _rawFrameCallbacks) {
+      rawFrameCallback->OnRawFrame(videoFrame, videoFrameStride, frameInfo);
+    }
   }
 
   size_t videoFrameLength =
